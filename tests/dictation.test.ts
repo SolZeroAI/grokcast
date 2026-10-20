@@ -13,13 +13,13 @@ import {
   dictateSpeech,
   DictationPreferences,
   DictationSettings,
-  joinChunks,
   languageFromPreference,
   LIVE_FINISH_TIMEOUT,
   recordSpeech,
   type DictationProgress,
 } from "../src/lib/dictation.ts"
 import { DictationHistory } from "../src/lib/history.ts"
+import { joinChunks } from "../src/lib/recorder.ts"
 import { LiveTranscriber, LiveTranscriptionError } from "../src/lib/live-transcriber.ts"
 import { Transcriber, Transcript, type TranscribeOptions } from "../src/lib/transcriber.ts"
 import { chunk, FakeRecorder, fakeRecorderLayer } from "./fake-recorder.ts"

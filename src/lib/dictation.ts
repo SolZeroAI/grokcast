@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
 import { DictationHistory } from "./history.ts"
 import { LiveTranscriber } from "./live-transcriber.ts"
-import { durationOfBytes, levelDbfs, Recorder } from "./recorder.ts"
+import { durationOfBytes, joinChunks, levelDbfs, Recorder } from "./recorder.ts"
 import { Transcriber, Transcript } from "./transcriber.ts"
 
 /** Recording stops on its own after this long and is transcribed. */
@@ -49,16 +49,6 @@ export interface Recording {
   /** Mono 16 kHz signed 16-bit little-endian PCM. */
   readonly audio: Uint8Array<ArrayBuffer>
   readonly seconds: number
-}
-
-/** One buffer with the bytes of all `chunks`, in order. */
-export const joinChunks = (chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayBuffer> => {
-  const joined = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0))
-  chunks.reduce((offset, chunk) => {
-    joined.set(chunk, offset)
-    return offset + chunk.byteLength
-  }, 0)
-  return joined
 }
 
 /**

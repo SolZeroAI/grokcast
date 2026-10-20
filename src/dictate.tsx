@@ -179,12 +179,23 @@ const dictate = Effect.fn("dictate")(function* (
     liveStopped: false,
     finishing: false,
   }
-  const show = () =>
+  // Render only when something visible changed. Audio chunks arrive many times a
+  // second, and Tinycast redraws more slowly than Raycast.
+  const shown = { key: "" }
+  const show = () => {
+    const key = [
+      view.finishing ? "finishing" : `${levelBar(view.level)} ${formatSeconds(view.seconds)}`,
+      view.text,
+      view.liveStopped,
+    ].join("|")
+    if (key === shown.key) return
+    shown.key = key
     setState(
       view.finishing
         ? State.Finishing({ seconds: view.seconds, text: view.text })
         : State.Recording({ ...view }),
     )
+  }
   const transcript = yield* dictateSpeech(stopped, {
     audio: (seconds, level) => {
       view.seconds = seconds

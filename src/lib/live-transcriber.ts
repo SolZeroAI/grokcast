@@ -17,7 +17,7 @@ import * as Stream from "effect/Stream"
 import * as HttpClient from "effect/http/HttpClient"
 import * as Socket from "effect/socket/Socket"
 import WebSocket from "ws"
-import { SAMPLE_RATE } from "./recorder.ts"
+import { BYTES_PER_SAMPLE, joinChunks, SAMPLE_RATE } from "./recorder.ts"
 import { GrokSession } from "./session.ts"
 
 /** xAI's streaming speech-to-text endpoint. The token is sent only here. */
@@ -25,6 +25,34 @@ export const LIVE_STT_URL = "wss://api.x.ai/v1/stt"
 
 /** Silence, in milliseconds, that ends an utterance. Grok Build uses the same value. */
 const ENDPOINTING_MS = 400
+
+/** Audio goes out in 100 ms frames. */
+export const FRAME_BYTES = (SAMPLE_RATE / 10) * BYTES_PER_SAMPLE
+
+/**
+ * Regroup recorder chunks into `FRAME_BYTES` frames, each in its own buffer, and a
+ * shorter last frame of whole samples. Recorder chunks can split a sample and can be
+ * views into a larger buffer, and Tinycast garbled audio sent that way.
+ */
+export const toFrames: <E, R>(
+  audio: Stream.Stream<Uint8Array, E, R>,
+) => Stream.Stream<Uint8Array, E, R> = Stream.mapAccum(
+  () => new Uint8Array(0),
+  (pending: Uint8Array, chunk: Uint8Array) => {
+    const joined = joinChunks([pending, chunk])
+    const whole = joined.byteLength - (joined.byteLength % FRAME_BYTES)
+    const frames = Array.from({ length: whole / FRAME_BYTES }, (_, index) =>
+      joined.slice(index * FRAME_BYTES, (index + 1) * FRAME_BYTES),
+    )
+    return [joined.slice(whole), frames] as const
+  },
+  {
+    onHalt: (pending) => {
+      const samples = pending.byteLength - (pending.byteLength % BYTES_PER_SAMPLE)
+      return samples > 0 ? [pending.slice(0, samples)] : []
+    },
+  },
+)
 
 /** How long to wait for the connection to open. */
 const OPEN_TIMEOUT = Duration.seconds(10)
@@ -156,6 +184,7 @@ const makeLiveTranscriber = Effect.fn("LiveTranscriber.make")(function* () {
 
       // Audio waits in `audio` until xAI says the session started.
       const sendAudio = audio.pipe(
+        toFrames,
         Stream.runForEach((chunk) => writer.write(chunk)),
         Effect.andThen(writer.write(AUDIO_DONE)),
         Effect.andThen(Ref.set(audioDone, true)),

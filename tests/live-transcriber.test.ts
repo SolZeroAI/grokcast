@@ -9,6 +9,8 @@ import * as Stream from "effect/Stream"
 import * as TestClock from "effect/testing/TestClock"
 import {
   addPartial,
+  FRAME_BYTES,
+  toFrames,
   LiveText,
   LiveTranscriber,
   liveSttUrl,
@@ -84,6 +86,25 @@ describe("liveSttUrl", () => {
   })
 })
 
+describe("toFrames", () => {
+  it("regroups chunks into 100 ms frames in their own buffers, and drops a split last sample", async () => {
+    const slab = new Uint8Array(FRAME_BYTES * 2 + 3).map((_, index) => index % 251)
+    const frames = await Effect.runPromise(
+      Stream.make(slab.subarray(0, 1001), slab.subarray(1001)).pipe(toFrames, Stream.runCollect),
+    )
+    assert.deepEqual(
+      frames.map((frame) => [frame.byteLength, frame.buffer.byteLength]),
+      [
+        [FRAME_BYTES, FRAME_BYTES],
+        [FRAME_BYTES, FRAME_BYTES],
+        [2, 2],
+      ],
+    )
+    assert.deepEqual(frames[1], slab.slice(FRAME_BYTES, FRAME_BYTES * 2))
+    assert.deepEqual(frames[2], slab.slice(FRAME_BYTES * 2, FRAME_BYTES * 2 + 2))
+  })
+})
+
 describe("addPartial", () => {
   it("shows the piece in progress and replaces it as it changes", () => {
     assert.equal(textOf(apply(partial("Hello"), partial("Hello there"))), "Hello there")
@@ -124,10 +145,7 @@ describe("LiveTranscriber.transcribe", () => {
     assert.ok(socket)
     assert.match(socket.url, /^wss:\/\/api\.x\.ai\/v1\/stt\?/)
     assert.equal(socket.headers["authorization"], "Bearer a1")
-    assert.deepEqual(socket.audio, [
-      { bytes: 4, afterCreated: true },
-      { bytes: 4, afterCreated: true },
-    ])
+    assert.deepEqual(socket.audio, [{ bytes: 8, afterCreated: true }])
     assert.deepEqual(socket.texts, ['{"type":"audio.done"}'])
     assert.deepEqual(updates.slice(-1), ["Hello there."])
     assert.ok(updates.includes("Hello"))
@@ -145,7 +163,7 @@ describe("LiveTranscriber.transcribe", () => {
     const { result } = transcribe(
       { onAudio: [partial("Hel")], dropAfterFrames: 1 },
       signedIn(),
-      Stream.concat(speech, Stream.never),
+      Stream.concat(Stream.make(new Uint8Array(FRAME_BYTES)), Stream.never),
     )
     assert.ok(Result.isFailure(await result))
   })

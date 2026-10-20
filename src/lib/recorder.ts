@@ -187,3 +187,13 @@ export const levelBar = (level: number): string => {
   const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * 20)
   return "█".repeat(filled) + "░".repeat(20 - filled)
 }
+
+/** One buffer with the bytes of all `chunks`, in order. */
+export const joinChunks = (chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayBuffer> => {
+  const joined = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0))
+  chunks.reduce((offset, chunk) => {
+    joined.set(chunk, offset)
+    return offset + chunk.byteLength
+  }, 0)
+  return joined
+}
