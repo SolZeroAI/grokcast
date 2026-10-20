@@ -1,7 +1,10 @@
-// Raycast wiring for the Grok session: tokens in Raycast's encrypted OAuth store,
-// the client ID from preferences.
+// Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID from
+// preferences, and the Swift microphone helper from the extension's assets.
 
-import { getPreferenceValues, OAuth } from "@raycast/api"
+import { spawn } from "node:child_process"
+import { chmodSync } from "node:fs"
+import { join } from "node:path"
+import { environment, getPreferenceValues, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
@@ -11,7 +14,17 @@ import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as FetchHttpClient from "effect/http/FetchHttpClient"
 import { ClientId, DEFAULT_CLIENT_ID, XaiEndpoints } from "./oauth.ts"
+import {
+  exitFromCode,
+  MicrophoneAccess,
+  MicrophonePermission,
+  Recorder,
+  RecorderError,
+  RecorderExit,
+  RecorderLauncher,
+} from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
+import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `sign-in.tsx`,
 // not `authorize()`, so the redirect method is never exercised.
@@ -72,11 +85,70 @@ export const RaycastClientId = Layer.sync(ClientId, () =>
   ),
 )
 
-/** Everything a command needs to talk to xAI as the signed-in user. */
-export const GrokLive = GrokSession.layer.pipe(
-  Layer.provideMerge(XaiEndpoints.layer),
-  Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),
-  Layer.provideMerge(FetchHttpClient.layer),
+const helperCall = <A>(call: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: call,
+    catch: () =>
+      new RecorderError({ reason: "failed", message: "Could not check microphone access." }),
+  })
+
+export const RaycastMicrophonePermission = Layer.succeed(
+  MicrophonePermission,
+  MicrophonePermission.of({
+    status: helperCall(microphoneAccess).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(MicrophoneAccess)),
+      Effect.mapError(
+        () =>
+          new RecorderError({ reason: "failed", message: "Could not check microphone access." }),
+      ),
+    ),
+    request: helperCall(requestMicrophoneAccess),
+  }),
+)
+
+/** `ray build` compiles `recorder/` to this path in the extension's assets. */
+const recorderBinary = () => join(environment.assetsPath, "compiled_raycast_swift", "recorder")
+
+export const RaycastRecorderLauncher = Layer.succeed(
+  RecorderLauncher,
+  RecorderLauncher.of({
+    start: (args, events) => {
+      const binary = recorderBinary()
+      // An installed extension's assets can lose the executable bit.
+      chmodSync(binary, 0o755)
+      const child = spawn(binary, [...args], { stdio: ["pipe", "pipe", "pipe"] })
+      const stderr: Array<string> = []
+      child.stdout.on("data", (chunk: Buffer) => events.audio(chunk))
+      child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk.toString("utf8")))
+      child.on("error", () =>
+        events.exit(RecorderExit.Failed({ message: "Could not start the microphone recorder." })),
+      )
+      child.on("exit", (code) =>
+        events.exit(exitFromCode(Option.fromNullishOr(code), stderr.join(""))),
+      )
+      return {
+        // Not stdin: Tinycast closes it at once.
+        finish: () => {
+          child.kill("SIGTERM")
+        },
+        kill: () => {
+          child.kill("SIGKILL")
+        },
+      }
+    },
+  }),
+)
+
+/** Everything a command needs: xAI as the signed-in user, and the microphone. */
+export const GrokLive = Layer.mergeAll(
+  GrokSession.layer.pipe(
+    Layer.provideMerge(XaiEndpoints.layer),
+    Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),
+    Layer.provideMerge(FetchHttpClient.layer),
+  ),
+  Recorder.layer.pipe(
+    Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
+  ),
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */

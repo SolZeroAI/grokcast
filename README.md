@@ -7,10 +7,14 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Feature                                          | State   |
 | ------------------------------------------------ | ------- |
 | Sign in and sign out with your Grok subscription | Done    |
-| Microphone recorder                              | Planned |
+| Microphone recorder (Test Microphone)            | Done    |
 | Dictate (record, then transcribe)                | Planned |
 | Live dictation with partial text                 | Planned |
 | Read selected text aloud                         | Planned |
+
+## Microphone
+
+Grokcast records with a small Swift helper that ships inside the extension, so you do not need to install anything. The first time it records, macOS asks to let Raycast (or Tinycast) use the microphone. **Test Microphone** records a few seconds and tells you whether Grokcast can hear you. Audio is not saved.
 
 ## How sign-in works
 

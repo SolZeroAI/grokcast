@@ -48,7 +48,8 @@
     },
     "runtime": {
       "name": "node",
-      "version": "24.15.0"
+      "version": "24.15.0",
+      "onFail": "warn"
     }
   },
   "engines": {
@@ -61,6 +62,13 @@
       "title": "Sign in to Grok",
       "subtitle": "Grokcast",
       "description": "Sign in with your Grok or X subscription. No API key needed.",
+      "mode": "view"
+    },
+    {
+      "name": "test-microphone",
+      "title": "Test Microphone",
+      "subtitle": "Grokcast",
+      "description": "Record a few seconds to check that Grokcast can hear you.",
       "mode": "view"
     },
     {

@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Typecheck, lint, format, test, and build
+    name: Typecheck, lint, format, and test
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -49,10 +49,37 @@ jobs:
       - name: Test
         run: nub run test
 
-      # `ray build` type-checks again with the generated raycast-env.d.ts and bundles each command.
-      - name: Build the extension
-        run: npx ray build --environment dist --non-interactive
-
       # Validates the manifest, the Store author, and the icons, the same way the Raycast Store does.
       - name: Validate the Raycast manifest
         run: npx ray lint --non-interactive
+
+  build:
+    name: Build the extension and the Swift recorder
+    # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup nub
+        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
+        with:
+          nub-version: "0.9.6"
+          node-version-file: .node-version
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: nub install --frozen-lockfile
+
+      - name: Show the Xcode version
+        run: xcodebuild -version
+
+      # `ray build` compiles recorder/, type-checks with the generated raycast-env.d.ts, and bundles each command.
+      - name: Build the extension
+        run: npx ray build --environment dist --non-interactive
+
+      - name: Check that the recorder was built
+        run: test -x assets/compiled_raycast_swift/recorder
