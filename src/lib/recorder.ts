@@ -115,9 +115,11 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
 
   const audio = Stream.callback<Uint8Array, RecorderError>((queue) => {
     const exited = Deferred.makeUnsafe<void>()
+    const samples = sampleAligner()
     const events: RecorderEvents = {
       audio: (chunk) => {
-        Queue.offerUnsafe(queue, chunk)
+        const aligned = samples(chunk)
+        if (aligned.byteLength > 0) Queue.offerUnsafe(queue, aligned)
       },
       exit: (exit) => {
         Deferred.doneUnsafe(exited, Effect.void)
@@ -163,6 +165,22 @@ export class Recorder extends Context.Service<
   }
 >()("grokcast/Recorder") {
   static readonly layer = Layer.effect(Recorder, makeRecorder())
+}
+
+/**
+ * Returns a function that turns chunks of a byte stream into chunks of whole
+ * samples. A byte left over from a chunk goes in front of the next one. Tinycast
+ * splits process output at odd byte counts (it holds back what looks like part of a
+ * UTF-8 character), and a split sample shifts every later sample by one byte.
+ */
+export const sampleAligner = () => {
+  const carry = { bytes: new Uint8Array(0) }
+  return (chunk: Uint8Array): Uint8Array => {
+    const joined = carry.bytes.byteLength === 0 ? chunk : joinChunks([carry.bytes, chunk])
+    const whole = joined.byteLength - (joined.byteLength % BYTES_PER_SAMPLE)
+    carry.bytes = joined.slice(whole)
+    return joined.subarray(0, whole)
+  }
 }
 
 /**

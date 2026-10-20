@@ -31,8 +31,7 @@ export const FRAME_BYTES = (SAMPLE_RATE / 10) * BYTES_PER_SAMPLE
 
 /**
  * Regroup recorder chunks into `FRAME_BYTES` frames, each in its own buffer, and a
- * shorter last frame of whole samples. Recorder chunks can split a sample and can be
- * views into a larger buffer, and Tinycast garbled audio sent that way.
+ * shorter last frame of whole samples. xAI reads each frame as whole samples.
  */
 export const toFrames: <E, R>(
   audio: Stream.Stream<Uint8Array, E, R>,
