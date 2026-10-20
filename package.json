@@ -1,0 +1,84 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "grokcast",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Use Grok in Raycast with your own Grok or X subscription and the official xAI SDK. No API key needed.",
+  "categories": [
+    "Media",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "author": "jonbeckman",
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "check": "nub run typecheck && nub run lint && nub run format && nub run test && nub run build",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt",
+    "lint": "NODE_OPTIONS='--import tsx' oxlint",
+    "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
+    "publish": "npx @raycast/api@latest publish",
+    "tegami": "tsx scripts/tegami.mts",
+    "test": "node --import tsx --test 'tests/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@raycast/api": "2.8.2",
+    "effect": "4.0.5"
+  },
+  "devDependencies": {
+    "@mpsuesser/oxlint-plugin-effect": "0.6.0",
+    "@oxlint/plugins": "1.87.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "anti-slop": "github:dmmulroy/anti-slop",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "tegami": "1.5.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  },
+  "icon": "extension-icon.png",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "^12.2.0",
+      "onFail": "warn"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "24.15.0"
+    }
+  },
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "packageManager": "npm@12.2.0+sha512.66c2632a94e796649738b2d7894d710c2cc2e1696893823066687f6b0d8a52e5f2b54eeaeaa32ffdc513ecca1e49ff794a5c2ec3f9515d879f1b3182b291cf35",
+  "commands": [
+    {
+      "name": "sign-in",
+      "title": "Sign in to Grok",
+      "subtitle": "Grokcast",
+      "description": "Sign in with your Grok or X subscription. No API key needed.",
+      "mode": "view"
+    },
+    {
+      "name": "sign-out",
+      "title": "Sign out of Grok",
+      "subtitle": "Grokcast",
+      "description": "Sign out and revoke this device's Grok sign-in.",
+      "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "clientId",
+      "title": "OAuth Client ID",
+      "description": "Leave empty to use the default xAI sign-in client. Change it only if xAI gives you a client ID for this extension.",
+      "type": "textfield",
+      "required": false
+    }
+  ],
+  "title": "Grokcast (XAI Sub for Chat, Voice, Image, and Video)"
+}
