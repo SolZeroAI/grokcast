@@ -11,6 +11,8 @@ import * as TestClock from "effect/testing/TestClock"
 import * as Stream from "effect/Stream"
 import {
   clockOf,
+  countWords,
+  detailRows,
   dictateSpeech,
   DictationPreferences,
   DictationSettings,
@@ -23,7 +25,11 @@ import {
 } from "../src/lib/dictation.ts"
 import { DictationHistory } from "../src/lib/history.ts"
 import { joinChunks } from "../src/lib/recorder.ts"
-import { LiveTranscriber, LiveTranscriptionError } from "../src/lib/live-transcriber.ts"
+import {
+  LiveTranscriber,
+  LiveTranscript,
+  LiveTranscriptionError,
+} from "../src/lib/live-transcriber.ts"
 import { Transcriber, Transcript, type TranscribeOptions } from "../src/lib/transcriber.ts"
 import { chunk, FakeRecorder, fakeRecorderLayer } from "./fake-recorder.ts"
 
@@ -44,7 +50,7 @@ const fakeTranscriber = (text: string) => {
       transcribe: (audio, options) =>
         Effect.sync(() => {
           calls.push({ bytes: audio.byteLength, options })
-          return new Transcript({ text, seconds: 1 })
+          return new Transcript({ text, seconds: 1, language: Option.some("en") })
         }),
     }),
   )
@@ -68,6 +74,51 @@ describe("recentText", () => {
     assert.ok(shown.startsWith("…word"))
     assert.ok(shown.endsWith("word99"))
     assert.ok(shown.length <= LIVE_TEXT_CHARS + 1)
+  })
+})
+
+describe("countWords", () => {
+  it("counts words, also in languages without spaces", () => {
+    assert.equal(countWords("Hello there, how are you?"), 5)
+    assert.equal(countWords(""), 0)
+    assert.ok(countWords("今日はいい天気です") > 1)
+  })
+})
+
+describe("detailRows", () => {
+  it("shows words, length, speed, language, wait, and method", () => {
+    const rows = detailRows({
+      text: "one two three four five six",
+      seconds: 3,
+      language: Option.some("en"),
+      readySeconds: Option.some(0.42),
+      live: Option.some(true),
+    })
+    assert.deepEqual(
+      rows.map((row) => [row.title, row.text]),
+      [
+        ["Words", "6"],
+        ["Length", "0:03"],
+        ["Speed", "120 words/min"],
+        ["Language", "English"],
+        ["Ready In", "0.4 s"],
+        ["Transcribed", "Live"],
+      ],
+    )
+  })
+
+  it("leaves out what an older entry does not have, and speed under a second", () => {
+    const rows = detailRows({
+      text: "hi",
+      seconds: 0.5,
+      language: Option.none(),
+      readySeconds: Option.none(),
+      live: Option.none(),
+    })
+    assert.deepEqual(
+      rows.map((row) => row.title),
+      ["Words", "Length"],
+    )
   })
 })
 
@@ -156,7 +207,7 @@ const fakeLive = (behavior: LiveBehavior) => {
               Match.when({ kind: "says" }, ({ text }) =>
                 Effect.sync(() => {
                   onText(text)
-                  return text
+                  return new LiveTranscript({ text, language: Option.some("fr") })
                 }),
               ),
               Match.when({ kind: "fails" }, () =>
@@ -223,15 +274,15 @@ describe("dictateSpeech", () => {
     const { batch, live, events, result } = run({ live: { kind: "says", text: "Live words." } })
     const { transcript, entries } = await result
     assert.deepEqual(
-      Option.map(transcript, (found) => found.text),
-      Option.some("Live words."),
+      Option.map(transcript, (found) => [found.text, found.language, found.live, found.seconds]),
+      Option.some(["Live words.", Option.some("fr"), true, 1]),
     )
     assert.equal(live.bytes, 32_000)
     assert.deepEqual(batch, [])
     assert.deepEqual(events, ["text:Live words.", "finishing:1"])
     assert.deepEqual(
-      entries.map((entry) => [entry.text, entry.seconds]),
-      [["Live words.", 1]],
+      entries.map((entry) => [entry.text, entry.seconds, entry.language, entry.live]),
+      [["Live words.", 1, Option.some("fr"), Option.some(true)]],
     )
   })
 
@@ -239,8 +290,8 @@ describe("dictateSpeech", () => {
     const { batch, events, result } = run({ live: { kind: "fails" } })
     const { transcript } = await result
     assert.deepEqual(
-      Option.map(transcript, (found) => found.text),
-      Option.some("From the recording."),
+      Option.map(transcript, (found) => [found.text, found.language, found.live]),
+      Option.some(["From the recording.", Option.some("en"), false]),
     )
     assert.deepEqual(batch, [
       { bytes: 32_000, options: { language: Option.some("en"), formatNumbers: true } },

@@ -4,6 +4,7 @@
 
 import * as Arr from "effect/Array"
 import * as Cause from "effect/Cause"
+import * as Clock from "effect/Clock"
 import * as Context from "effect/Context"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -15,7 +16,7 @@ import * as Stream from "effect/Stream"
 import { DictationHistory } from "./history.ts"
 import { LiveTranscriber } from "./live-transcriber.ts"
 import { durationOfBytes, joinChunks, levelDbfs, Recorder } from "./recorder.ts"
-import { Transcriber, Transcript } from "./transcriber.ts"
+import { Transcriber } from "./transcriber.ts"
 
 /** Recording stops on its own after this long and is transcribed. */
 export const MAX_DICTATION = Duration.minutes(5)
@@ -101,6 +102,19 @@ export interface DictationProgress {
   readonly finishing: (seconds: number) => void
 }
 
+/** A finished dictation, with what is known about it. */
+export class Dictation extends Schema.Class<Dictation>("Dictation")({
+  text: Schema.String,
+  /** Length of the recording in seconds. */
+  seconds: Schema.Finite,
+  /** The language xAI heard, such as `en`. */
+  language: Schema.Option(Schema.String),
+  /** Seconds from the end of recording until the text was ready. */
+  readySeconds: Schema.Finite,
+  /** True when the text came from live transcription, false when the whole recording was sent. */
+  live: Schema.Boolean,
+}) {}
+
 /**
  * Record until `stop` completes and transcribe live while the user speaks. When live
  * transcription stops, or gives no text, the whole recording is sent in one request.
@@ -124,25 +138,81 @@ export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
     Queue.offerUnsafe(audio, chunk)
     progress.audio(seconds, level)
   }).pipe(Effect.ensuring(Queue.end(audio)))
-  if (recording.seconds < MIN_DICTATION_SECONDS) return Option.none<Transcript>()
+  if (recording.seconds < MIN_DICTATION_SECONDS) return Option.none<Dictation>()
   progress.finishing(recording.seconds)
+  const stoppedAt = yield* Clock.currentTimeMillis
 
   const heard = yield* Fiber.join(liveText).pipe(
     Effect.timeoutOption(LIVE_FINISH_TIMEOUT),
-    Effect.map((text) => Option.filter(Option.flatten(text), (words) => words !== "")),
+    Effect.map((transcript) =>
+      Option.filter(Option.flatten(transcript), (found) => found.text !== ""),
+    ),
   )
   const transcript = yield* Option.match(heard, {
-    onSome: (text) => Effect.succeed(new Transcript({ text, seconds: recording.seconds })),
-    onNone: () => transcribeRecording(recording),
+    onSome: (found) => Effect.succeed({ text: found.text, language: found.language, live: true }),
+    onNone: () =>
+      transcribeRecording(recording).pipe(
+        Effect.map((found) => ({ text: found.text, language: found.language, live: false })),
+      ),
   })
-  if (transcript.text === "") return Option.none<Transcript>()
+  if (transcript.text === "") return Option.none<Dictation>()
+  const dictation = new Dictation({
+    ...transcript,
+    seconds: recording.seconds,
+    readySeconds: ((yield* Clock.currentTimeMillis) - stoppedAt) / 1000,
+  })
   if (settings.keepHistory) {
-    yield* DictationHistory.use((history) => history.add(transcript.text, recording.seconds)).pipe(
-      Effect.ignore,
-    )
+    yield* DictationHistory.use((history) => history.add(dictation)).pipe(Effect.ignore)
   }
-  return Option.some(transcript)
+  return Option.some(dictation)
 })
+
+/** The number of words in `text`. Works for languages that do not put spaces between words. */
+export const countWords = (text: string): number =>
+  Array.from(new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)).filter(
+    (segment) => segment.isWordLike === true,
+  ).length
+
+/** The name of a language code in the user's language, such as `English` for `en`. */
+export const languageName = (code: string): string =>
+  Option.getOrElse(
+    Option.fromNullishOr(new Intl.DisplayNames(undefined, { type: "language" }).of(code)),
+    () => code,
+  )
+
+/** What a dictation's details can show. Older history entries lack some of them. */
+export interface DictationFacts {
+  readonly text: string
+  readonly seconds: number
+  readonly language: Option.Option<string>
+  readonly readySeconds: Option.Option<number>
+  readonly live: Option.Option<boolean>
+}
+
+/** Rows for a details panel: words, length, speed, language, wait, and method. */
+export const detailRows = (
+  facts: DictationFacts,
+): ReadonlyArray<{ readonly title: string; readonly text: string }> => {
+  const words = countWords(facts.text)
+  const rows = [
+    Option.some({ title: "Words", text: String(words) }),
+    Option.some({ title: "Length", text: clockOf(facts.seconds) }),
+    Option.map(
+      Option.liftPredicate(facts.seconds, (seconds) => seconds >= 1),
+      (seconds) => ({ title: "Speed", text: `${Math.round((words / seconds) * 60)} words/min` }),
+    ),
+    Option.map(facts.language, (code) => ({ title: "Language", text: languageName(code) })),
+    Option.map(facts.readySeconds, (seconds) => ({
+      title: "Ready In",
+      text: `${seconds.toFixed(1)} s`,
+    })),
+    Option.map(facts.live, (live) => ({
+      title: "Transcribed",
+      text: live ? "Live" : "From the whole recording",
+    })),
+  ]
+  return Arr.getSomes(rows)
+}
 
 /** While the user speaks, show at most this many characters of the text. */
 export const LIVE_TEXT_CHARS = 280

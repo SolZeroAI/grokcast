@@ -10,6 +10,7 @@ import {
   LaunchType,
   showHUD,
   type Image,
+  type Keyboard,
 } from "@raycast/api"
 import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
@@ -17,7 +18,15 @@ import * as Fiber from "effect/Fiber"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { clockOf, DictationPreferences, dictateSpeech, recentText } from "./lib/dictation.ts"
+import {
+  clockOf,
+  countWords,
+  detailRows,
+  Dictation,
+  DictationPreferences,
+  dictateSpeech,
+  recentText,
+} from "./lib/dictation.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { levelBar } from "./lib/recorder.ts"
 
@@ -32,11 +41,7 @@ type State = Data.TaggedEnum<{
     readonly liveStopped: boolean
   }
   Finishing: { readonly seconds: number; readonly text: string }
-  Done: {
-    readonly text: string
-    readonly seconds: number
-    readonly delivered: "pasted" | "copied"
-  }
+  Done: { readonly dictation: Dictation; readonly delivered: "pasted" | "copied" }
   NoSpeech: {}
   Failed: { readonly message: string; readonly signIn: boolean }
 }>
@@ -78,6 +83,17 @@ export default function Dictate() {
       icon={Icon.Microphone}
       shortcut={{ modifiers: ["cmd"], key: "r" }}
       onAction={again}
+    />
+  )
+
+  const historyAction = (
+    <Action
+      title="Open Dictation History"
+      icon={Icon.Clock}
+      shortcut={HISTORY_SHORTCUT}
+      onAction={() =>
+        void launchCommand({ name: "dictation-history", type: LaunchType.UserInitiated })
+      }
     />
   )
 
@@ -125,22 +141,30 @@ export default function Dictate() {
         }
       />
     ),
-    Done: ({ text, seconds, delivered }) => (
+    Done: ({ dictation, delivered }) => (
       <Detail
-        markdown={text}
+        markdown={dictation.text}
         metadata={
           <Status
             label={delivered === "pasted" ? "Pasted" : "Copied to the clipboard"}
             icon={{ source: Icon.CheckCircle, tintColor: Color.Green }}
+            history
           >
-            <Detail.Metadata.Label title="Length" text={clockOf(seconds)} />
+            {detailRows({
+              ...dictation,
+              readySeconds: Option.some(dictation.readySeconds),
+              live: Option.some(dictation.live),
+            }).map((row) => (
+              <Detail.Metadata.Label key={row.title} title={row.title} text={row.text} />
+            ))}
           </Status>
         }
         actions={
           <ActionPanel>
-            <Action.Paste content={text} />
-            <Action.CopyToClipboard content={text} />
+            <Action.Paste content={dictation.text} />
+            <Action.CopyToClipboard content={dictation.text} />
             {againAction}
+            {historyAction}
           </ActionPanel>
         }
       />
@@ -148,8 +172,13 @@ export default function Dictate() {
     NoSpeech: () => (
       <Detail
         markdown="Nothing was transcribed. Check the microphone with **Test Microphone**, then try again."
-        metadata={<Status label="No speech was heard" icon={Icon.MicrophoneDisabled} />}
-        actions={<ActionPanel>{againAction}</ActionPanel>}
+        metadata={<Status label="No speech was heard" icon={Icon.MicrophoneDisabled} history />}
+        actions={
+          <ActionPanel>
+            {againAction}
+            {historyAction}
+          </ActionPanel>
+        }
       />
     ),
     Failed: ({ message, signIn }) => (
@@ -183,20 +212,29 @@ export default function Dictate() {
 /** Steps in the side panel's level meter. Fewer steps mean fewer redraws. */
 const METER_STEPS = 8
 
-/** The side panel: the status first, then `children`. Every state uses it, so the layout stays put. */
+const HISTORY_SHORTCUT: Keyboard.Shortcut = { modifiers: ["cmd"], key: "y" }
+
+/**
+ * The side panel: the status first, then `children`, then the history shortcut when
+ * `history` is set. Every state uses it, so the layout stays put.
+ */
 function Status({
   label,
   icon = Icon.Microphone,
+  history = false,
   children,
 }: {
   readonly label: string
   readonly icon?: Image.ImageLike
+  readonly history?: boolean
   readonly children?: ReactNode
 }) {
   return (
     <Detail.Metadata>
       <Detail.Metadata.Label title="Status" text={label} icon={icon} />
       {children}
+      {history ? <Detail.Metadata.Separator /> : null}
+      {history ? <Detail.Metadata.Label title="Dictation History" text="⌘ Y" /> : null}
     </Detail.Metadata>
   )
 }
@@ -261,31 +299,38 @@ const dictate = Effect.fn("dictate")(function* (
     setState(State.NoSpeech())
     return
   }
-  const { text, seconds } = transcript.value
-  const delivered = yield* deliver(text, settings.afterDictation)
-  setState(State.Done({ text, seconds, delivered }))
+  const dictation = transcript.value
+  const delivered = yield* deliver(dictation, settings.afterDictation)
+  setState(State.Done({ dictation, delivered }))
 })
 
 /**
  * Paste into the app that was in front before Raycast opened, or copy. A paste that
- * fails falls back to a copy, so the text is never lost.
+ * fails falls back to a copy, so the text is never lost. A HUD sums up the dictation.
  */
-const deliver = (text: string, afterDictation: "paste" | "copy") =>
+const deliver = (dictation: Dictation, afterDictation: "paste" | "copy") =>
   Match.value(afterDictation).pipe(
     Match.when("paste", () =>
       Effect.tryPromise(async () => {
         await closeMainWindow()
-        await Clipboard.paste(text)
+        await Clipboard.paste(dictation.text)
+        await showHUD(`Pasted ${summaryOf(dictation)}`)
       }).pipe(
         Effect.as("pasted" as const),
-        Effect.catch(() => copy(text)),
+        Effect.catch(() => copy(dictation)),
       ),
     ),
-    Match.orElse(() => copy(text)),
+    Match.orElse(() => copy(dictation)),
   )
 
-const copy = (text: string) =>
+const copy = (dictation: Dictation) =>
   Effect.tryPromise(async () => {
-    await Clipboard.copy(text)
-    await showHUD("Copied the dictation")
+    await Clipboard.copy(dictation.text)
+    await showHUD(`Copied ${summaryOf(dictation)}`)
   }).pipe(Effect.ignore, Effect.as("copied" as const))
+
+/** Such as `42 words from 0:12 of speech`. */
+const summaryOf = (dictation: Dictation): string => {
+  const words = countWords(dictation.text)
+  return `${words} ${words === 1 ? "word" : "words"} from ${clockOf(dictation.seconds)} of speech`
+}

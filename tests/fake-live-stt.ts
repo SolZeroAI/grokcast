@@ -17,12 +17,13 @@ const encodeEvent = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
 
 export const created = { type: "transcript.created", id: "session" }
 
-export const partial = (text: string, isFinal = false, speechFinal = false) =>
+export const partial = (text: string, isFinal = false, speechFinal = false, language = "en") =>
   ({
     type: "transcript.partial",
     text,
     is_final: isFinal,
     speech_final: speechFinal,
+    language,
   }) as const
 
 export const done = { type: "transcript.done", text: "", duration: 1 }

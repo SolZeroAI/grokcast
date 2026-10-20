@@ -92,6 +92,8 @@ export const Partial = Schema.Struct({
   text: Schema.String,
   is_final: flag,
   speech_final: flag,
+  /** The language xAI hears, such as `en`. */
+  language: Schema.OptionFromOptionalKey(Schema.String),
 })
 export type Partial = typeof Partial.Type
 
@@ -117,8 +119,15 @@ export class LiveText extends Schema.Class<LiveText>("LiveText")({
   pieces: Schema.Array(Schema.String),
   /** The piece in progress. It can still change. */
   interim: Schema.String,
+  /** The last language xAI reported. */
+  language: Schema.Option(Schema.String),
 }) {
-  static readonly empty = new LiveText({ utterances: [], pieces: [], interim: "" })
+  static readonly empty = new LiveText({
+    utterances: [],
+    pieces: [],
+    interim: "",
+    language: Option.none(),
+  })
 }
 
 const joinWords = (parts: ReadonlyArray<string>): string =>
@@ -128,11 +137,19 @@ const joinWords = (parts: ReadonlyArray<string>): string =>
     .join(" ")
 
 /** Add one partial to the text heard so far. */
-export const addPartial = (live: LiveText, partial: Partial): LiveText =>
-  Match.value(partial).pipe(
+export const addPartial = (previous: LiveText, partial: Partial): LiveText => {
+  const live = new LiveText({
+    ...previous,
+    language: Option.orElse(
+      Option.filter(partial.language, (code) => code !== ""),
+      () => previous.language,
+    ),
+  })
+  return Match.value(partial).pipe(
     Match.when({ speech_final: true }, () => {
       const utterance = partial.text.trim() === "" ? joinWords(live.pieces) : partial.text
       return new LiveText({
+        ...live,
         utterances: Arr.append(live.utterances, utterance),
         pieces: [],
         interim: "",
@@ -140,15 +157,11 @@ export const addPartial = (live: LiveText, partial: Partial): LiveText =>
     }),
     Match.when(
       { is_final: true },
-      () =>
-        new LiveText({
-          utterances: live.utterances,
-          pieces: Arr.append(live.pieces, partial.text),
-          interim: "",
-        }),
+      () => new LiveText({ ...live, pieces: Arr.append(live.pieces, partial.text), interim: "" }),
     ),
     Match.orElse(() => new LiveText({ ...live, interim: partial.text })),
   )
+}
 
 /**
  * Everything heard so far, as one text. A piece that never became final is kept,
@@ -156,6 +169,13 @@ export const addPartial = (live: LiveText, partial: Partial): LiveText =>
  */
 export const textOf = (live: LiveText): string =>
   joinWords([...live.utterances, ...live.pieces, live.interim])
+
+/** What live transcription heard. */
+export class LiveTranscript extends Schema.Class<LiveTranscript>("LiveTranscript")({
+  text: Schema.String,
+  /** The last language xAI reported, such as `en`. */
+  language: Schema.Option(Schema.String),
+}) {}
 
 const makeLiveTranscriber = Effect.fn("LiveTranscriber.make")(function* () {
   const session = yield* GrokSession
@@ -216,7 +236,8 @@ const makeLiveTranscriber = Effect.fn("LiveTranscriber.make")(function* () {
           ),
         ),
       )
-      return textOf(yield* Ref.get(heard))
+      const live = yield* Ref.get(heard)
+      return new LiveTranscript({ text: textOf(live), language: live.language })
     },
     Effect.scoped,
     Effect.catchTag("SocketError", (error) => Effect.fail(failed(error.message))),
@@ -238,7 +259,7 @@ export class LiveTranscriber extends Context.Service<
       audio: Stream.Stream<Uint8Array>,
       language: Option.Option<string>,
       onText: (text: string) => void,
-    ) => Effect.Effect<string, LiveTranscriptionError>
+    ) => Effect.Effect<LiveTranscript, LiveTranscriptionError>
   }
 >()("grokcast/LiveTranscriber") {
   static readonly layer = Layer.effect(LiveTranscriber, makeLiveTranscriber())

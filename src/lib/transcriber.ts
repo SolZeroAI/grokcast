@@ -44,6 +44,8 @@ export class Transcript extends Schema.Class<Transcript>("Transcript")({
   text: Schema.String,
   /** Length of the audio in seconds, as xAI measured it. */
   seconds: Schema.Finite,
+  /** The language xAI heard, such as `en`. */
+  language: Schema.Option(Schema.String),
 }) {}
 
 export interface TranscribeOptions {
@@ -171,7 +173,11 @@ const makeTranscriber = Effect.fn("Transcriber.make")(function* () {
         ),
       catch: (cause) => new XaiSdkError({ cause }),
     }).pipe(Effect.mapError(toTranscriptionError))
-    return new Transcript({ text: result.text.trim(), seconds: result.duration })
+    return new Transcript({
+      text: result.text.trim(),
+      seconds: result.duration,
+      language: Option.liftPredicate(result.language, (code) => code !== ""),
+    })
   })
 
   return Transcriber.of({ transcribe })

@@ -13,6 +13,7 @@ import {
   toFrames,
   LiveText,
   LiveTranscriber,
+  LiveTranscript,
   liveSttUrl,
   textOf,
   type Partial,
@@ -66,7 +67,14 @@ const transcribe = (
   return { sockets: xai.sockets, updates, result }
 }
 
-const apply = (...partials: ReadonlyArray<Partial>) => partials.reduce(addPartial, LiveText.empty)
+/** Decoded partials, as `addPartial` gets them. */
+const decoded = (event: ReturnType<typeof partial>): Partial => ({
+  ...event,
+  language: Option.some(event.language),
+})
+
+const apply = (...events: ReadonlyArray<ReturnType<typeof partial>>) =>
+  events.map(decoded).reduce(addPartial, LiveText.empty)
 
 describe("liveSttUrl", () => {
   it("asks for interim text from 16 kHz PCM", () => {
@@ -106,6 +114,13 @@ describe("toFrames", () => {
 })
 
 describe("addPartial", () => {
+  it("keeps the last language xAI reported", () => {
+    assert.deepEqual(
+      apply(partial("Hola", false, false, "es"), partial("Hola amigo", true, false, "")).language,
+      Option.some("es"),
+    )
+  })
+
   it("shows the piece in progress and replaces it as it changes", () => {
     assert.equal(textOf(apply(partial("Hello"), partial("Hello there"))), "Hello there")
   })
@@ -117,7 +132,7 @@ describe("addPartial", () => {
       partial("How are you?", true),
     )
     assert.equal(textOf(live), "Hello there. How are you?")
-    const finished = addPartial(live, partial("Hello there. How are you?", true, true))
+    const finished = addPartial(live, decoded(partial("Hello there. How are you?", true, true)))
     assert.deepEqual(finished.utterances, ["Hello there. How are you?"])
     assert.equal(textOf(finished), "Hello there. How are you?")
   })
@@ -140,7 +155,10 @@ describe("LiveTranscriber.transcribe", () => {
       onAudioDone: [partial("Hello there.", true), partial("Hello there.", true, true), done],
       dropAfterDone: true,
     })
-    assert.deepEqual(await result, Result.succeed("Hello there."))
+    assert.deepEqual(
+      await result,
+      Result.succeed(new LiveTranscript({ text: "Hello there.", language: Option.some("en") })),
+    )
     const [socket] = sockets
     assert.ok(socket)
     assert.match(socket.url, /^wss:\/\/api\.x\.ai\/v1\/stt\?/)
@@ -156,7 +174,10 @@ describe("LiveTranscriber.transcribe", () => {
       onAudioDone: [partial("Short.", true)],
       dropAfterDone: true,
     })
-    assert.deepEqual(await result, Result.succeed("Short."))
+    assert.deepEqual(
+      Result.map(await result, (heard) => heard.text),
+      Result.succeed("Short."),
+    )
   })
 
   it("fails when the connection drops while audio is still being sent", async () => {
