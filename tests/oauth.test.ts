@@ -1,28 +1,33 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import * as Effect from "effect/Effect"
+import * as Fiber from "effect/Fiber"
+import * as Option from "effect/Option"
+import * as Redacted from "effect/Redacted"
+import * as TestClock from "effect/testing/TestClock"
 import {
   DEFAULT_CLIENT_ID,
+  DeviceCode,
   discoverEndpoints,
   emailFromIdToken,
   isXaiUrl,
-  OAuthError,
+  OAuthEndpoints,
   pollDeviceToken,
   refreshTokens,
   requestDeviceCode,
   revokeToken,
   XAI_SCOPES,
-  type DeviceCode,
 } from "../src/lib/oauth.ts"
-import { endpoints, fakeFetch, json } from "./support.ts"
+import { endpoints, fakeFetch, formOf, json, run } from "./support.ts"
 
-const device: DeviceCode = {
-  deviceCode: "device-123",
+const device = new DeviceCode({
+  deviceCode: Redacted.make("device-123"),
   userCode: "ABCD-EFGH",
   verificationUri: "https://accounts.x.ai/oauth2/device",
-  verificationUriComplete: undefined,
+  verificationUriComplete: Option.none(),
   expiresIn: 1800,
   interval: 5,
-}
+})
 
 describe("isXaiUrl", () => {
   it("accepts HTTPS on x.ai and its subdomains", () => {
@@ -40,31 +45,41 @@ describe("isXaiUrl", () => {
 
 describe("discoverEndpoints", () => {
   it("reads the endpoints from the OpenID configuration", async () => {
-    const { fetch, requests } = fakeFetch(() =>
+    const fetch = fakeFetch(() =>
       json({
         device_authorization_endpoint: "https://auth.x.ai/oauth2/device/code",
         token_endpoint: "https://auth.x.ai/oauth2/token",
         revocation_endpoint: "https://auth.x.ai/oauth2/revoke",
       }),
     )
-    assert.deepEqual(await discoverEndpoints(fetch), endpoints)
-    assert.equal(requests[0]?.url, "https://auth.x.ai/.well-known/openid-configuration")
+    const discovered = await run(discoverEndpoints("https://auth.x.ai"), fetch)
+    assert.ok(discovered instanceof OAuthEndpoints)
+    assert.deepEqual({ ...discovered }, { ...endpoints })
+    assert.equal(fetch.requests[0]?.url, "https://auth.x.ai/.well-known/openid-configuration")
   })
 
   it("refuses an endpoint outside x.ai, so a token is never sent there", async () => {
-    const { fetch } = fakeFetch(() =>
+    const fetch = fakeFetch(() =>
       json({
         device_authorization_endpoint: "https://auth.x.ai/oauth2/device/code",
         token_endpoint: "https://attacker.example.com/token",
       }),
     )
-    await assert.rejects(discoverEndpoints(fetch), { code: "invalid_discovery" })
+    const error = await run(Effect.flip(discoverEndpoints("https://auth.x.ai")), fetch)
+    assert.equal(error.code, "invalid_discovery")
+  })
+
+  it("reports an unreachable sign-in server as discovery_failed", async () => {
+    const fetch = fakeFetch(() => new Response("unavailable", { status: 503 }))
+    const error = await run(Effect.flip(discoverEndpoints("https://auth.x.ai")), fetch)
+    assert.equal(error.code, "discovery_failed")
+    assert.deepEqual(error.status, Option.some(503))
   })
 })
 
 describe("requestDeviceCode", () => {
   it("sends the client ID, the scopes, and the referrer", async () => {
-    const { fetch, requests } = fakeFetch(() =>
+    const fetch = fakeFetch(() =>
       json({
         device_code: "device-123",
         user_code: "ABCD-EFGH",
@@ -73,134 +88,178 @@ describe("requestDeviceCode", () => {
         interval: 5,
       }),
     )
-    const result = await requestDeviceCode(fetch, endpoints, DEFAULT_CLIENT_ID)
-    assert.deepEqual(result, device)
-    const form = new URLSearchParams(requests[0]?.body)
-    assert.equal(form.get("client_id"), DEFAULT_CLIENT_ID)
-    assert.equal(form.get("scope"), XAI_SCOPES)
-    assert.equal(form.get("referrer"), "grok-voice")
+    const result = await run(requestDeviceCode(endpoints, DEFAULT_CLIENT_ID), fetch)
+    assert.equal(Redacted.value(result.deviceCode), "device-123")
+    assert.equal(result.userCode, "ABCD-EFGH")
+    assert.equal(result.browserUrl, "https://accounts.x.ai/oauth2/device")
+    assert.equal(result.expiresIn, 1800)
+    assert.equal(result.interval, 5)
+    const sent = formOf(fetch, 0)
+    assert.equal(sent.get("client_id"), DEFAULT_CLIENT_ID)
+    assert.equal(sent.get("scope"), XAI_SCOPES)
+    assert.equal(sent.get("referrer"), "grok-voice")
   })
 
   it("returns the OAuth error code from a refused request", async () => {
-    const { fetch } = fakeFetch(() => json({ error: "invalid_client" }, 401))
-    await assert.rejects(requestDeviceCode(fetch, endpoints, "bad"), {
-      code: "invalid_client",
-      status: 401,
-    })
+    const fetch = fakeFetch(() => json({ error: "invalid_client" }, 401))
+    const error = await run(Effect.flip(requestDeviceCode(endpoints, "bad")), fetch)
+    assert.equal(error.code, "invalid_client")
+    assert.deepEqual(error.status, Option.some(401))
   })
 })
 
 describe("pollDeviceToken", () => {
   it("waits while authorization is pending, backs off on slow_down, then returns the tokens", async () => {
-    const waits: number[] = []
-    const { fetch, requests } = fakeFetch((_request, index) => {
+    const fetch = fakeFetch((_request, index) => {
       if (index === 0) return json({ error: "authorization_pending" }, 400)
       if (index === 1) return json({ error: "slow_down" }, 400)
       return json({ access_token: "access", refresh_token: "refresh", expires_in: 21600 })
     })
-    const tokens = await pollDeviceToken(fetch, endpoints, "client", device, async (ms) => {
-      waits.push(ms)
-    })
-    assert.deepEqual(waits, [5000, 5000, 10000])
-    assert.equal(tokens.access_token, "access")
-    assert.equal(tokens.refresh_token, "refresh")
-    assert.equal(tokens.expires_in, 21600)
-    const form = new URLSearchParams(requests[2]?.body)
-    assert.equal(form.get("grant_type"), "urn:ietf:params:oauth:grant-type:device_code")
-    assert.equal(form.get("device_code"), "device-123")
+    const requestsAfter = (seconds: number) =>
+      TestClock.adjust(`${seconds} seconds`).pipe(
+        // Let the HTTP round trip that the clock released finish.
+        Effect.andThen(Effect.sleep("10 millis").pipe(TestClock.withLive)),
+        Effect.map(() => fetch.requests.length),
+      )
+    const tokens = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(pollDeviceToken(endpoints, "client", device))
+        // 5 s, then 5 s, then 10 s after slow_down.
+        assert.equal(yield* requestsAfter(4), 0)
+        assert.equal(yield* requestsAfter(1), 1)
+        assert.equal(yield* requestsAfter(5), 2)
+        assert.equal(yield* requestsAfter(9), 2)
+        assert.equal(yield* requestsAfter(1), 3)
+        return yield* Fiber.join(fiber)
+      }),
+      fetch,
+    )
+    assert.equal(Redacted.value(tokens.access_token), "access")
+    assert.deepEqual(Option.map(tokens.refresh_token, Redacted.value), Option.some("refresh"))
+    assert.deepEqual(tokens.expires_in, Option.some(21600))
+    const sent = formOf(fetch, 2)
+    assert.equal(sent.get("grant_type"), "urn:ietf:params:oauth:grant-type:device_code")
+    assert.equal(sent.get("device_code"), "device-123")
   })
 
   it("stops when the user declines", async () => {
-    const { fetch } = fakeFetch(() => json({ error: "access_denied" }, 400))
-    await assert.rejects(
-      pollDeviceToken(fetch, endpoints, "client", device, async () => {}),
-      { code: "access_denied" },
+    const fetch = fakeFetch(() => json({ error: "access_denied" }, 400))
+    const error = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(
+          Effect.flip(pollDeviceToken(endpoints, "client", device)),
+        )
+        yield* TestClock.adjust("5 seconds")
+        return yield* Fiber.join(fiber)
+      }),
+      fetch,
     )
+    assert.equal(error.code, "access_denied")
   })
 
   it("stops when the code's lifetime has passed", async () => {
-    let clock = 0
-    const { fetch } = fakeFetch(() => json({ error: "authorization_pending" }, 400))
-    await assert.rejects(
-      pollDeviceToken(
-        fetch,
-        endpoints,
-        "client",
-        { ...device, expiresIn: 10 },
-        async (ms) => {
-          clock += ms
-        },
-        undefined,
-        () => clock,
-      ),
-      { code: "expired_token" },
+    const fetch = fakeFetch(() => json({ error: "authorization_pending" }, 400))
+    const error = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(
+          Effect.flip(
+            pollDeviceToken(endpoints, "client", new DeviceCode({ ...device, expiresIn: 10 })),
+          ),
+        )
+        yield* TestClock.adjust("10 seconds")
+        return yield* Fiber.join(fiber)
+      }),
+      fetch,
     )
+    assert.equal(error.code, "expired_token")
   })
 
-  it("stops when the signal aborts", async () => {
-    const abort = new AbortController()
-    abort.abort(new Error("closed"))
-    const { fetch } = fakeFetch(() => json({ error: "authorization_pending" }, 400))
-    await assert.rejects(
-      pollDeviceToken(fetch, endpoints, "client", device, undefined, abort.signal),
-      /closed/,
+  it("stops when interrupted", async () => {
+    const fetch = fakeFetch(() => json({ error: "authorization_pending" }, 400))
+    const exit = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(pollDeviceToken(endpoints, "client", device))
+        yield* Fiber.interrupt(fiber)
+        return yield* Fiber.await(fiber)
+      }),
+      fetch,
     )
+    assert.equal(exit._tag, "Failure")
+    assert.equal(fetch.requests.length, 0)
   })
 })
 
 describe("refreshTokens", () => {
   it("sends a refresh_token grant", async () => {
-    const { fetch, requests } = fakeFetch(() =>
+    const fetch = fakeFetch(() =>
       json({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 21600 }),
     )
-    const tokens = await refreshTokens(fetch, endpoints, "client", "old-refresh")
-    assert.equal(tokens.refresh_token, "new-refresh")
-    const form = new URLSearchParams(requests[0]?.body)
-    assert.equal(form.get("grant_type"), "refresh_token")
-    assert.equal(form.get("refresh_token"), "old-refresh")
+    const tokens = await run(
+      refreshTokens(endpoints, "client", Redacted.make("old-refresh")),
+      fetch,
+    )
+    assert.deepEqual(Option.map(tokens.refresh_token, Redacted.value), Option.some("new-refresh"))
+    const sent = formOf(fetch, 0)
+    assert.equal(sent.get("grant_type"), "refresh_token")
+    assert.equal(sent.get("refresh_token"), "old-refresh")
   })
 
   it("reports invalid_grant for a spent refresh token", async () => {
-    const { fetch } = fakeFetch(() => json({ error: "invalid_grant" }, 400))
-    const error = await refreshTokens(fetch, endpoints, "client", "spent").catch(
-      (caught: unknown) => caught,
+    const fetch = fakeFetch(() => json({ error: "invalid_grant" }, 400))
+    const error = await run(
+      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("spent"))),
+      fetch,
     )
-    assert.ok(error instanceof OAuthError)
+    assert.equal(error._tag, "OAuthError")
     assert.equal(error.code, "invalid_grant")
   })
 
   it("rejects a response with no access token", async () => {
-    const { fetch } = fakeFetch(() => json({ token_type: "Bearer" }))
-    await assert.rejects(refreshTokens(fetch, endpoints, "client", "refresh"), {
-      code: "invalid_token_response",
-    })
+    const fetch = fakeFetch(() => json({ token_type: "Bearer" }))
+    const error = await run(
+      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("refresh"))),
+      fetch,
+    )
+    assert.equal(error.code, "invalid_token_response")
+  })
+
+  it("keeps tokens out of error messages", async () => {
+    const fetch = fakeFetch(() => json({ access_token: "secret-access", expires_in: "soon" }))
+    const error = await run(
+      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("secret-refresh"))),
+      fetch,
+    )
+    assert.doesNotMatch(String(error), /secret/)
   })
 })
 
 describe("revokeToken", () => {
   it("posts the token to the revocation endpoint", async () => {
-    const { fetch, requests } = fakeFetch(() => new Response(null, { status: 200 }))
-    await revokeToken(fetch, endpoints, "client", "refresh")
-    assert.equal(requests[0]?.url, endpoints.revocation)
-    assert.equal(new URLSearchParams(requests[0]?.body).get("token"), "refresh")
+    const fetch = fakeFetch(() => new Response(null, { status: 200 }))
+    await run(revokeToken(endpoints, "client", Redacted.make("refresh")), fetch)
+    assert.equal(fetch.requests[0]?.url, "https://auth.x.ai/oauth2/revoke")
+    assert.equal(formOf(fetch, 0).get("token"), "refresh")
   })
 
   it("does nothing when the server has no revocation endpoint", async () => {
-    const { fetch, requests } = fakeFetch(() => new Response(null, { status: 200 }))
-    await revokeToken(fetch, { ...endpoints, revocation: undefined }, "client", "refresh")
-    assert.equal(requests.length, 0)
+    const fetch = fakeFetch(() => new Response(null, { status: 200 }))
+    const noRevocation = new OAuthEndpoints({ ...endpoints, revocation: Option.none() })
+    await run(revokeToken(noRevocation, "client", Redacted.make("refresh")), fetch)
+    assert.equal(fetch.requests.length, 0)
   })
 })
 
 describe("emailFromIdToken", () => {
+  const idToken = (payload: string) => Option.some(Redacted.make(`header.${payload}.signature`))
+
   it("reads the email claim", () => {
-    const payload = Buffer.from(JSON.stringify({ email: "me@example.com" })).toString("base64url")
-    assert.equal(emailFromIdToken(`header.${payload}.signature`), "me@example.com")
+    const payload = Buffer.from('{"email":"me@example.com"}').toString("base64url")
+    assert.deepEqual(emailFromIdToken(idToken(payload)), Option.some("me@example.com"))
   })
 
-  it("returns undefined for a missing or malformed token", () => {
-    assert.equal(emailFromIdToken(undefined), undefined)
-    assert.equal(emailFromIdToken("not-a-jwt"), undefined)
-    assert.equal(emailFromIdToken("a.%%%.c"), undefined)
+  it("returns none for a missing or malformed token", () => {
+    assert.deepEqual(emailFromIdToken(Option.none()), Option.none())
+    assert.deepEqual(emailFromIdToken(Option.some(Redacted.make("not-a-jwt"))), Option.none())
+    assert.deepEqual(emailFromIdToken(idToken("%%%")), Option.none())
   })
 })

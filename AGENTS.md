@@ -7,11 +7,12 @@ Use Plain Language in introductory, expository, friendly, and other sensible com
 
 ## Repository
 
-This repository is the Raycast extension Grok Voice. It does speech-to-text and text-to-speech with the user's own Grok or X subscription. It must run in Raycast and in Tinycast.
+This repository is the Raycast extension Grok (Chat, Voice, Image, Video). It uses the user's own Grok or X subscription and xAI's official TypeScript SDK, so it can offer any native Grok feature. Voice (speech-to-text and text-to-speech) comes first. It must run in Raycast and in Tinycast.
 
 - Use the user's xAI OAuth sign-in. Do not add an xAI API key option or a backend.
 - Keep `src/lib/` free of Raycast imports so unit tests run under plain Node.
-- Do not add Alchemy, Effect, Cloudflare Workers, TanStack Start, Clerk, PlanetScale, drizzle, or turbo.
+- Write code in idiomatic Effect v4. CONTRIBUTING.md lists the conventions. Fix Effect lint warnings in `src/` and `tests/` instead of disabling them.
+- Do not add Alchemy, Cloudflare Workers, TanStack Start, Clerk, PlanetScale, drizzle, or turbo.
 - Unit tests use Node's test runner (`node --import tsx --test`). Do not add tester-army/e2e, Vitest, Jest, or Playwright.
 - Do not add ESLint or Prettier as dependencies. Lint and format are oxlint and oxfmt. `.prettierrc.json` only keeps the Raycast Store's Prettier check in agreement with oxfmt.
 - Do not print, log, or commit tokens, device codes, or recorded audio.

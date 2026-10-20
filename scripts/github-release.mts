@@ -7,7 +7,7 @@ import {
   type TegamiPlugin,
 } from "tegami"
 
-const PACKAGE_NAME = "grok-voice"
+const PACKAGE_NAME = "grok"
 
 interface ReleaseTarget {
   tag: string
@@ -68,7 +68,7 @@ function releaseTarget(context: TegamiContext, plan: PublishPlan): ReleaseTarget
     return {
       tag,
       version: pkg.version,
-      title: `Grok Voice v${pkg.version}`,
+      title: `Grok v${pkg.version}`,
       notes: notes || `Published ${pkg.name} v${pkg.version}.`,
       prerelease: pkg.version.includes("-"),
     }

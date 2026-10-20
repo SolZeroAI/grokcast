@@ -1,6 +1,6 @@
 ---
 packages:
-  npm:grok-voice:
+  npm:grok:
     type: minor
 ---
 

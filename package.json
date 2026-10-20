@@ -1,9 +1,9 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "grok-voice",
+  "name": "grok",
   "version": "0.0.0",
   "private": true,
-  "description": "Dictate and read text aloud with Grok, using your own Grok subscription. No API key needed.",
+  "description": "Use Grok in Raycast with your own Grok or X subscription and the official xAI SDK. No API key needed.",
   "categories": [
     "Media",
     "Productivity"
@@ -24,9 +24,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@raycast/api": "2.8.2"
+    "@raycast/api": "2.8.2",
+    "effect": "4.0.5"
   },
   "devDependencies": {
+    "@mpsuesser/oxlint-plugin-effect": "0.6.0",
     "@oxlint/plugins": "1.87.0",
     "@types/node": "22.19.17",
     "@types/react": "19.0.10",
@@ -57,14 +59,14 @@
     {
       "name": "sign-in",
       "title": "Sign in to Grok",
-      "subtitle": "Grok Voice",
+      "subtitle": "Grok",
       "description": "Sign in with your Grok or X subscription. No API key needed.",
       "mode": "view"
     },
     {
       "name": "sign-out",
       "title": "Sign out of Grok",
-      "subtitle": "Grok Voice",
+      "subtitle": "Grok",
       "description": "Sign out and revoke this device's Grok sign-in.",
       "mode": "no-view"
     }
@@ -78,5 +80,5 @@
       "required": false
     }
   ],
-  "title": "Grok Voice"
+  "title": "Grok (Chat, Voice, Image, Video)"
 }
