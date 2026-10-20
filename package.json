@@ -64,6 +64,13 @@
       "mode": "view"
     },
     {
+      "name": "test-microphone",
+      "title": "Test Microphone",
+      "subtitle": "Grokcast",
+      "description": "Record a few seconds to check that Grokcast can hear you.",
+      "mode": "view"
+    },
+    {
       "name": "sign-out",
       "title": "Sign out of Grok",
       "subtitle": "Grokcast",

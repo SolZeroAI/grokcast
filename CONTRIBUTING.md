@@ -8,6 +8,7 @@ Grokcast is a Raycast extension. It must also run in Tinycast. It follows the Sh
 - **Node `24.15.0`** for development and CI (`engines` is `>=24.15.0 <25`). At run time the extension uses the host's JavaScript runtime: Raycast runs Node 22, and Tinycast runs its own engine with a partial Node layer. Types are `@types/node` 22 to match the lower of the two.
 - **TypeScript `7.0.2`**. TypeScript 7 does not load `@types` packages on its own, so `tsconfig.json` lists `"types": ["node"]`.
 - **Effect `4.0.5`**. Write new code in idiomatic Effect v4: namespace imports (`import * as Effect from "effect/Effect"`), services as `Context.Service` classes provided by `Layer`, errors as `Schema.TaggedError`, functions as `Effect.fn("name")`, `Option` instead of `undefined`, `Match` instead of `switch`, `Redacted` for tokens, and `effect/http` `HttpClient` for requests. Commands run programs through `GrokRuntime` (a `ManagedRuntime`); nothing else calls `Effect.run*`.
+- **Xcode 16.3 or later** (macOS only) for `ray build` and `ray develop`. They compile the Swift recorder in `recorder/` with Raycast's Swift tools ([`extensions-swift-tools`](https://github.com/raycast/extensions-swift-tools)), the same way the Raycast Store builds it. On Linux, `nub run check` stops at the build step; CI builds on a macOS runner.
 - **oxlint `1.87.0`** and **oxfmt `0.72.0`**, with `anti-slop`, `anti-slop-effect`, and `@mpsuesser/oxlint-plugin-effect` rules as warnings. The Effect rule set matches the other SolZero repositories. `.prettierrc.json` matches the oxfmt settings, because the Raycast Store checks formatting with Prettier.
 
 ```sh
@@ -22,6 +23,15 @@ npx ray lint      # Raycast's manifest and icon checks
 Unit tests use Node's test runner (`node --import tsx --test`). They cover the code in `src/lib/`, which has no Raycast imports. Provide fakes as layers (see `tests/support.ts`: a fake `fetch`, an in-memory token store, and `TestClock`); do not mock modules. tester-army/e2e is not used: a Raycast extension has no web UI for it to drive. This is the same exception the DNA gives libraries.
 
 Try each user-facing change in Raycast and in Tinycast before you merge it. Tinycast does not run real Node. Do not use `child_process.fork`, `worker_threads`, or other Node modules outside the common set (files, child processes, crypto, buffers, `fetch`, and the `ws` package).
+
+## Microphone recorder
+
+`recorder/` is a Swift package built by `ray build` into `assets/compiled_raycast_swift/recorder` (git-ignored). No compiled binary is committed.
+
+- `microphoneAccess` and `requestMicrophoneAccess` are called through the generated `swift:` bindings. `src/swift.d.ts` declares them so `tsc` runs before a build.
+- `record` streams audio, which the bindings cannot do, so `RecorderLauncher` starts the binary as `recorder record 16000` and reads stdout: mono, signed 16-bit little-endian PCM at 16 kHz.
+- To stop, close the recorder's stdin. It also stops on SIGINT or SIGTERM, and when the extension goes away. `Recorder` kills it if it has not exited 2 seconds after stdin closes.
+- macOS asks for microphone access for the host app (Raycast or Tinycast), not for the recorder. `Recorder.ensureAccess` shows the prompt the first time and fails with `RecorderError` (`reason: "denied"`) when access is off.
 
 ## Sign-in rules
 
