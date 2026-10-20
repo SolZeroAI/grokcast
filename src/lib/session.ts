@@ -33,7 +33,7 @@ export class StoredTokens extends Schema.Class<StoredTokens>("StoredTokens")({
   expiresAt: Schema.Finite,
 }) {}
 
-/** There is no usable sign-in. The UI tells the user to run Sign in to Grok. */
+/** There is no usable sign-in. The UI tells the user to sign in from Grok Account. */
 export class NotSignedInError extends Schema.TaggedError<NotSignedInError>()("NotSignedInError", {
   message: Schema.String,
 }) {}
@@ -103,10 +103,10 @@ const copyRequest = (request: Request): Request =>
 export type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 const notSignedIn = new NotSignedInError({
-  message: "Not signed in to Grok. Run Sign in to Grok first.",
+  message: "Not signed in to Grok. Sign in from Grok Account first.",
 })
 const signInExpired = new NotSignedInError({
-  message: "The Grok sign-in expired. Run Sign in to Grok again.",
+  message: "The Grok sign-in expired. Sign in again from Grok Account.",
 })
 
 const make = Effect.fn("GrokSession.make")(function* () {

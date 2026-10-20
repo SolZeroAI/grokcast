@@ -9,10 +9,11 @@ import {
   DEFAULT_CLIENT_ID,
   DeviceCode,
   discoverEndpoints,
-  emailFromIdToken,
   isXaiUrl,
   OAuthEndpoints,
   pollDeviceToken,
+  Profile,
+  profileFromIdToken,
   refreshTokens,
   requestDeviceCode,
   revokeToken,
@@ -249,17 +250,27 @@ describe("revokeToken", () => {
   })
 })
 
-describe("emailFromIdToken", () => {
+describe("profileFromIdToken", () => {
   const idToken = (payload: string) => Option.some(Redacted.make(`header.${payload}.signature`))
+  const claims = (json: string) => idToken(Buffer.from(json).toString("base64url"))
 
-  it("reads the email claim", () => {
-    const payload = Buffer.from('{"email":"me@example.com"}').toString("base64url")
-    assert.deepEqual(emailFromIdToken(idToken(payload)), Option.some("me@example.com"))
+  it("reads the name and email claims", () => {
+    assert.deepEqual(
+      profileFromIdToken(claims('{"name":"Ada","email":"me@example.com","sub":"1"}')),
+      new Profile({ name: Option.some("Ada"), email: Option.some("me@example.com") }),
+    )
   })
 
-  it("returns none for a missing or malformed token", () => {
-    assert.deepEqual(emailFromIdToken(Option.none()), Option.none())
-    assert.deepEqual(emailFromIdToken(Option.some(Redacted.make("not-a-jwt"))), Option.none())
-    assert.deepEqual(emailFromIdToken(idToken("%%%")), Option.none())
+  it("keeps the claims that are there", () => {
+    assert.deepEqual(
+      profileFromIdToken(claims('{"email":"me@example.com"}')),
+      new Profile({ name: Option.none(), email: Option.some("me@example.com") }),
+    )
+  })
+
+  it("knows nobody for a missing or malformed token", () => {
+    assert.deepEqual(profileFromIdToken(Option.none()), Profile.unknown)
+    assert.deepEqual(profileFromIdToken(Option.some(Redacted.make("not-a-jwt"))), Profile.unknown)
+    assert.deepEqual(profileFromIdToken(idToken("%%%")), Profile.unknown)
   })
 })

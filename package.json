@@ -61,10 +61,10 @@
   "packageManager": "npm@12.2.0+sha512.66c2632a94e796649738b2d7894d710c2cc2e1696893823066687f6b0d8a52e5f2b54eeaeaa32ffdc513ecca1e49ff794a5c2ec3f9515d879f1b3182b291cf35",
   "commands": [
     {
-      "name": "sign-in",
-      "title": "Sign in to Grok",
+      "name": "account",
+      "title": "Grok Account",
       "subtitle": "Grokcast",
-      "description": "Sign in with your Grok or X subscription. No API key needed.",
+      "description": "See who is signed in, and sign in or out with your Grok or X subscription. No API key needed.",
       "mode": "view"
     },
     {
@@ -80,20 +80,6 @@
       "subtitle": "Grokcast",
       "description": "Search, paste, or copy your past dictations.",
       "mode": "view"
-    },
-    {
-      "name": "test-microphone",
-      "title": "Test Microphone",
-      "subtitle": "Grokcast",
-      "description": "Record a few seconds to check that Grokcast can hear you.",
-      "mode": "view"
-    },
-    {
-      "name": "sign-out",
-      "title": "Sign out of Grok",
-      "subtitle": "Grokcast",
-      "description": "Sign out and revoke this device's Grok sign-in.",
-      "mode": "no-view"
     }
   ],
   "preferences": [

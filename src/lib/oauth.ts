@@ -301,19 +301,23 @@ export const revokeToken = Effect.fn("oauth.revokeToken")(function* (
   )
 })
 
-const decodeClaims = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Struct({ email: Schema.String })),
-)
+/** Who is signed in, from the ID token's claims. For display only. */
+export class Profile extends Schema.Class<Profile>("Profile")({
+  name: Schema.OptionFromOptionalKey(Schema.String),
+  email: Schema.OptionFromOptionalKey(Schema.String),
+}) {
+  static readonly unknown = new Profile({ name: Option.none(), email: Option.none() })
+}
 
-/** The `email` claim from an ID token, for display only. The token is not verified. */
-export const emailFromIdToken = (
-  idToken: Option.Option<Redacted.Redacted<string>>,
-): Option.Option<string> =>
+const decodeProfile = Schema.decodeUnknownOption(Schema.fromJsonString(Profile))
+
+/** The name and email in an ID token. The token is not verified, so show them only. */
+export const profileFromIdToken = (idToken: Option.Option<Redacted.Redacted<string>>): Profile =>
   idToken.pipe(
     Option.flatMap((token) => Arr.get(Redacted.value(token).split("."), 1)),
     Option.flatMap((payload) => Result.getSuccess(Base64Url.decodeString(payload))),
-    Option.flatMap(decodeClaims),
-    Option.map((claims) => claims.email),
+    Option.flatMap(decodeProfile),
+    Option.getOrElse(() => Profile.unknown),
   )
 
 /** The OAuth client ID. Raycast reads it from the extension preferences. */

@@ -37,7 +37,7 @@ import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
 import { Transcriber } from "./transcriber.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
-// Only the token store is used. Sign-in runs the device-code flow in `sign-in.tsx`,
+// Only the token store is used. Sign-in runs the device-code flow in `account.tsx`,
 // not `authorize()`, so the redirect method is never exercised.
 const client = new OAuth.PKCEClient({
   redirectMethod: OAuth.RedirectMethod.Web,

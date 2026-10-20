@@ -171,7 +171,7 @@ export default function Dictate() {
     ),
     NoSpeech: () => (
       <Detail
-        markdown="Nothing was transcribed. Check the microphone with **Test Microphone**, then try again."
+        markdown="Nothing was transcribed. Check that the right microphone is selected in System Settings › Sound, then try again."
         metadata={<Status label="No speech was heard" icon={Icon.MicrophoneDisabled} history />}
         actions={
           <ActionPanel>
@@ -197,7 +197,11 @@ export default function Dictate() {
                 title="Sign in to Grok"
                 icon={Icon.Person}
                 onAction={() =>
-                  void launchCommand({ name: "sign-in", type: LaunchType.UserInitiated })
+                  void launchCommand({
+                    name: "account",
+                    type: LaunchType.UserInitiated,
+                    context: { signIn: true },
+                  })
                 }
               />
             ) : null}
