@@ -23,7 +23,23 @@ export class HistoryEntry extends Schema.Class<HistoryEntry>("HistoryEntry")({
   createdAt: Schema.Finite,
   /** Length of the recording in seconds. */
   seconds: Schema.Finite,
+  // Added with live dictation. Older entries do not have them.
+  /** The language xAI heard, such as `en`. */
+  language: Schema.OptionFromOptionalKey(Schema.String),
+  /** Seconds from the end of recording until the text was ready. */
+  readySeconds: Schema.OptionFromOptionalKey(Schema.Finite),
+  /** True when the text came from live transcription. */
+  live: Schema.OptionFromOptionalKey(Schema.Boolean),
 }) {}
+
+/** What `add` keeps from a dictation. */
+export interface NewEntry {
+  readonly text: string
+  readonly seconds: number
+  readonly language: Option.Option<string>
+  readonly readySeconds: number
+  readonly live: boolean
+}
 
 const Entries = Schema.Array(HistoryEntry)
 
@@ -41,9 +57,17 @@ const makeHistory = Effect.fn("DictationHistory.make")(function* () {
   const update = (f: (entries: ReadonlyArray<HistoryEntry>) => ReadonlyArray<HistoryEntry>) =>
     lock.withPermits(1)(Effect.flatMap(list, (entries) => store.set(KEY, f(entries))))
 
-  const add = Effect.fn("DictationHistory.add")(function* (text: string, seconds: number) {
+  const add = Effect.fn("DictationHistory.add")(function* (dictation: NewEntry) {
     const createdAt = yield* Clock.currentTimeMillis
-    const entry = new HistoryEntry({ id: String(createdAt), text, createdAt, seconds })
+    const entry = new HistoryEntry({
+      id: String(createdAt),
+      text: dictation.text,
+      createdAt,
+      seconds: dictation.seconds,
+      language: dictation.language,
+      readySeconds: Option.some(dictation.readySeconds),
+      live: Option.some(dictation.live),
+    })
     yield* update((entries) =>
       Arr.take(
         Arr.prepend(
@@ -70,8 +94,7 @@ export class DictationHistory extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<HistoryEntry>>
     readonly add: (
-      text: string,
-      seconds: number,
+      dictation: NewEntry,
     ) => Effect.Effect<HistoryEntry, KeyValueStore.KeyValueStoreError | Schema.SchemaError>
     readonly remove: (
       id: string,

@@ -13,4 +13,6 @@ Flag these:
 - A recording path that can leave the Swift recorder running after the stream ends, the command closes, or an error. The extension stops the recorder with SIGTERM, not by closing stdin (Tinycast closes stdin at once).
 - A real API key passed to `SpaceXAI`. The key in `src/lib/transcriber.ts` is a placeholder; `GrokSession.fetch` replaces the authorization header with the user's OAuth token.
 - A change to `process.versions` that is not limited to Tinycast and put back after the SDK client starts.
+- A live transcription path that can lose the user's words. When the live session fails, `dictateSpeech` must send the whole recording instead.
+- A WebSocket URL with the bearer header that is not `wss://api.x.ai/...`.
 - A committed binary under `assets/`. The recorder is built from `recorder/` by `ray build`.

@@ -33,6 +33,7 @@ import {
   RecorderLauncher,
 } from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
+import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
 import { Transcriber } from "./transcriber.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
@@ -198,11 +199,12 @@ export const RaycastRecorderLauncher = Layer.succeed(
 )
 
 /**
- * Everything a command needs: xAI as the signed-in user, speech-to-text, the
- * microphone, and the dictation preferences and history.
+ * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
+ * in one request), the microphone, and the dictation preferences and history.
  */
 export const GrokLive = Layer.mergeAll(
-  Transcriber.layer.pipe(
+  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer).pipe(
+    Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(XaiEndpoints.layer),
     Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),

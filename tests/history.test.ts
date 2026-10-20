@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
+import * as Option from "effect/Option"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import { DictationHistory, MAX_HISTORY } from "../src/lib/history.ts"
@@ -27,7 +28,11 @@ const texts = DictationHistory.use((history) => history.list).pipe(
 /** Add a dictation one millisecond after the previous one. */
 const add = (text: string) =>
   TestClock.adjust("1 millis").pipe(
-    Effect.andThen(DictationHistory.use((history) => history.add(text, 1))),
+    Effect.andThen(
+      DictationHistory.use((history) =>
+        history.add({ text, seconds: 1, language: Option.none(), readySeconds: 0.5, live: true }),
+      ),
+    ),
   )
 
 describe("DictationHistory", () => {
@@ -73,6 +78,20 @@ describe("DictationHistory", () => {
       ),
     )
     assert.deepEqual(afterClear, [])
+  })
+
+  it("reads entries saved before live dictation, which have no language or timing", async () => {
+    const listed = await run(
+      Effect.gen(function* () {
+        const store = yield* KeyValueStore.KeyValueStore
+        yield* store.set("dictation-history", '[{"id":"1","text":"old","createdAt":1,"seconds":2}]')
+        return yield* DictationHistory.use((history) => history.list)
+      }),
+    )
+    assert.deepEqual(
+      listed.map((entry) => [entry.text, entry.language, entry.readySeconds, entry.live]),
+      [["old", Option.none(), Option.none(), Option.none()]],
+    )
   })
 
   it("treats unreadable stored history as empty and replaces it on the next dictation", async () => {

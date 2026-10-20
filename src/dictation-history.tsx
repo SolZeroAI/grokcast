@@ -11,6 +11,7 @@ import {
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { useEffect, useState } from "react"
+import { detailRows } from "./lib/dictation.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { DictationHistory, type HistoryEntry } from "./lib/history.ts"
 
@@ -83,10 +84,13 @@ export default function DictationHistoryCommand() {
                     title="Dictated"
                     text={dateFormat.format(entry.createdAt)}
                   />
-                  <List.Item.Detail.Metadata.Label
-                    title="Length"
-                    text={`${entry.seconds.toFixed(1)} s`}
-                  />
+                  {detailRows(entry).map((row) => (
+                    <List.Item.Detail.Metadata.Label
+                      key={row.title}
+                      title={row.title}
+                      text={row.text}
+                    />
+                  ))}
                 </List.Item.Detail.Metadata>
               }
             />

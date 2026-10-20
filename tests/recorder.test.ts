@@ -11,10 +11,12 @@ import {
   exitFromCode,
   levelBar,
   levelDbfs,
+  joinChunks,
   MicrophonePermission,
   Recorder,
   RecorderExit,
   RecorderLauncher,
+  sampleAligner,
   type MicrophoneAccess,
 } from "../src/lib/recorder.ts"
 import { chunk, FakeRecorder } from "./fake-recorder.ts"
@@ -72,6 +74,23 @@ describe("Recorder.record", () => {
     assert.deepEqual(calls.started, [["record", "16000", "600"]])
     assert.equal(recorder.finished, true)
     assert.equal(recorder.killed, false)
+  })
+
+  it("streams whole samples when the host splits the output at odd byte counts, as Tinycast does", async () => {
+    const bytes = new Uint8Array(1365 + 3 + 1 + 4096 + 1).map((_, index) => index % 251)
+    const splits = [1365, 3, 1, 4096, 1]
+    const pieces = splits.map((size, index) => {
+      const start = splits.slice(0, index).reduce((sum, value) => sum + value, 0)
+      return bytes.subarray(start, start + size)
+    })
+    const recorder = new FakeRecorder().speak(...pieces).exitWith(RecorderExit.Finished())
+    const { run } = setup({ recorder })
+    const collected = await run(collect(10))
+    assert.deepEqual(
+      collected.map((piece) => piece.byteLength % 2),
+      collected.map(() => 0),
+    )
+    assert.deepEqual(joinChunks(collected), bytes)
   })
 
   it("ends the stream when the recorder exits normally", async () => {
@@ -140,6 +159,16 @@ describe("exitFromCode", () => {
       exitFromCode(Option.none(), ""),
       RecorderExit.Failed({ message: "The microphone recorder stopped." }),
     )
+  })
+})
+
+describe("sampleAligner", () => {
+  it("carries a split sample into the next chunk", () => {
+    const align = sampleAligner()
+    assert.deepEqual(align(new Uint8Array([1, 2, 3])), new Uint8Array([1, 2]))
+    assert.deepEqual(align(new Uint8Array([4])), new Uint8Array([3, 4]))
+    assert.deepEqual(align(new Uint8Array([5])), new Uint8Array([]))
+    assert.deepEqual(align(new Uint8Array([6, 7, 8])), new Uint8Array([5, 6, 7, 8]))
   })
 })
 

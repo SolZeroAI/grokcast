@@ -115,9 +115,11 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
 
   const audio = Stream.callback<Uint8Array, RecorderError>((queue) => {
     const exited = Deferred.makeUnsafe<void>()
+    const samples = sampleAligner()
     const events: RecorderEvents = {
       audio: (chunk) => {
-        Queue.offerUnsafe(queue, chunk)
+        const aligned = samples(chunk)
+        if (aligned.byteLength > 0) Queue.offerUnsafe(queue, aligned)
       },
       exit: (exit) => {
         Deferred.doneUnsafe(exited, Effect.void)
@@ -166,6 +168,22 @@ export class Recorder extends Context.Service<
 }
 
 /**
+ * Returns a function that turns chunks of a byte stream into chunks of whole
+ * samples. A byte left over from a chunk goes in front of the next one. Tinycast
+ * splits process output at odd byte counts (it holds back what looks like part of a
+ * UTF-8 character), and a split sample shifts every later sample by one byte.
+ */
+export const sampleAligner = () => {
+  const carry = { bytes: new Uint8Array(0) }
+  return (chunk: Uint8Array): Uint8Array => {
+    const joined = carry.bytes.byteLength === 0 ? chunk : joinChunks([carry.bytes, chunk])
+    const whole = joined.byteLength - (joined.byteLength % BYTES_PER_SAMPLE)
+    carry.bytes = joined.slice(whole)
+    return joined.subarray(0, whole)
+  }
+}
+
+/**
  * The loudness of a PCM chunk in dBFS (0 is full scale), from its RMS. Silence and an
  * empty chunk give `-Infinity`.
  */
@@ -182,8 +200,18 @@ export const levelDbfs = (chunk: Uint8Array): number => {
 /** Seconds of audio in `bytes` of recorder output. */
 export const durationOfBytes = (bytes: number): number => bytes / (SAMPLE_RATE * BYTES_PER_SAMPLE)
 
-/** A 20-step text meter for a level between -60 dBFS and 0 dBFS. */
-export const levelBar = (level: number): string => {
-  const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * 20)
-  return "█".repeat(filled) + "░".repeat(20 - filled)
+/** A text meter with `steps` steps (20 by default) for a level between -60 dBFS and 0 dBFS. */
+export const levelBar = (level: number, steps = 20): string => {
+  const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * steps)
+  return "█".repeat(filled) + "░".repeat(steps - filled)
+}
+
+/** One buffer with the bytes of all `chunks`, in order. */
+export const joinChunks = (chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayBuffer> => {
+  const joined = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0))
+  chunks.reduce((offset, chunk) => {
+    joined.set(chunk, offset)
+    return offset + chunk.byteLength
+  }, 0)
+  return joined
 }
