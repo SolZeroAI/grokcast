@@ -10,11 +10,14 @@ import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import * as Stream from "effect/Stream"
 import {
+  clockOf,
   dictateSpeech,
   DictationPreferences,
   DictationSettings,
   languageFromPreference,
   LIVE_FINISH_TIMEOUT,
+  LIVE_TEXT_CHARS,
+  recentText,
   recordSpeech,
   type DictationProgress,
 } from "../src/lib/dictation.ts"
@@ -54,6 +57,24 @@ describe("joinChunks", () => {
       joinChunks([new Uint8Array([1, 2]), new Uint8Array([]), new Uint8Array([3])]),
       new Uint8Array([1, 2, 3]),
     )
+  })
+})
+
+describe("recentText", () => {
+  it("keeps short text, and cuts long text to its end at a word", () => {
+    assert.equal(recentText("Hello there."), "Hello there.")
+    const long = Array.from({ length: 100 }, (_, index) => `word${index}`).join(" ")
+    const shown = recentText(long)
+    assert.ok(shown.startsWith("…word"))
+    assert.ok(shown.endsWith("word99"))
+    assert.ok(shown.length <= LIVE_TEXT_CHARS + 1)
+  })
+})
+
+describe("clockOf", () => {
+  it("shows whole minutes and seconds", () => {
+    assert.equal(clockOf(7.9), "0:07")
+    assert.equal(clockOf(135), "2:15")
   })
 })
 

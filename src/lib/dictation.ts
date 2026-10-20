@@ -144,6 +144,26 @@ export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
   return Option.some(transcript)
 })
 
+/** While the user speaks, show at most this many characters of the text. */
+export const LIVE_TEXT_CHARS = 280
+
+/**
+ * The end of `text`, at most `LIVE_TEXT_CHARS` long and starting at a word, with an
+ * ellipsis when the start was cut. A short view keeps each redraw small.
+ */
+export const recentText = (text: string): string => {
+  if (text.length <= LIVE_TEXT_CHARS) return text
+  const tail = text.slice(-LIVE_TEXT_CHARS)
+  const word = tail.indexOf(" ")
+  return `…${word >= 0 ? tail.slice(word + 1) : tail}`
+}
+
+/** A length as minutes and seconds, such as `0:07` or `2:15`. */
+export const clockOf = (seconds: number): string => {
+  const whole = Math.floor(seconds)
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`
+}
+
 /** The language to send, from a preference value where `auto` means detect it. */
 export const languageFromPreference = (value: string): Option.Option<string> =>
   Option.filter(Option.some(value.trim()), (code) => code !== "" && code !== "auto")

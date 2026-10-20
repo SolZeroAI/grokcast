@@ -3,19 +3,21 @@ import {
   ActionPanel,
   Clipboard,
   closeMainWindow,
+  Color,
   Detail,
   Icon,
   launchCommand,
   LaunchType,
   showHUD,
+  type Image,
 } from "@raycast/api"
 import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
-import { useEffect, useRef, useState } from "react"
-import { DictationPreferences, dictateSpeech } from "./lib/dictation.ts"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { clockOf, DictationPreferences, dictateSpeech, recentText } from "./lib/dictation.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { levelBar } from "./lib/recorder.ts"
 
@@ -30,7 +32,11 @@ type State = Data.TaggedEnum<{
     readonly liveStopped: boolean
   }
   Finishing: { readonly seconds: number; readonly text: string }
-  Done: { readonly text: string; readonly delivered: "pasted" | "copied" }
+  Done: {
+    readonly text: string
+    readonly seconds: number
+    readonly delivered: "pasted" | "copied"
+  }
   NoSpeech: {}
   Failed: { readonly message: string; readonly signIn: boolean }
 }>
@@ -76,23 +82,27 @@ export default function Dictate() {
   )
 
   return State.$match(state, {
-    Starting: () => <Detail isLoading markdown="Starting the microphone…" />,
+    Starting: () => (
+      <Detail isLoading markdown="" metadata={<Status label="Starting the microphone" />} />
+    ),
     Recording: ({ seconds, level, text, liveStopped }) => (
       <Detail
         isLoading
-        markdown={[
-          "# Listening",
-          "",
-          `\`${levelBar(level)}\` ${formatSeconds(seconds)}`,
-          "",
+        markdown={
           liveStopped
             ? "_Live text is not available. The text appears when you stop._"
             : text === ""
               ? "_Start speaking. The text appears here._"
-              : quote(text),
-          "",
-          "Press **Return** to stop and transcribe. Press **Esc** to cancel.",
-        ].join("\n")}
+              : recentText(text)
+        }
+        metadata={
+          <Status label="Listening" icon={{ source: Icon.Microphone, tintColor: Color.Red }}>
+            <Detail.Metadata.Label title="Level" text={levelBar(level, METER_STEPS)} />
+            <Detail.Metadata.Label title="Length" text={clockOf(seconds)} />
+            <Detail.Metadata.Separator />
+            <Detail.Metadata.Label title="Cancel" text="Esc" />
+          </Status>
+        }
         actions={
           <ActionPanel>
             <Action
@@ -107,20 +117,25 @@ export default function Dictate() {
     Finishing: ({ seconds, text }) => (
       <Detail
         isLoading
-        markdown={[
-          "# Finishing",
-          "",
-          text === "" ? `${formatSeconds(seconds)} of audio` : quote(text),
-        ].join("\n")}
+        markdown={recentText(text)}
+        metadata={
+          <Status label="Finishing" icon={Icon.Hourglass}>
+            <Detail.Metadata.Label title="Length" text={clockOf(seconds)} />
+          </Status>
+        }
       />
     ),
-    Done: ({ text, delivered }) => (
+    Done: ({ text, seconds, delivered }) => (
       <Detail
-        markdown={[
-          delivered === "pasted" ? "# Pasted" : "# Copied to the clipboard",
-          "",
-          quote(text),
-        ].join("\n")}
+        markdown={text}
+        metadata={
+          <Status
+            label={delivered === "pasted" ? "Pasted" : "Copied to the clipboard"}
+            icon={{ source: Icon.CheckCircle, tintColor: Color.Green }}
+          >
+            <Detail.Metadata.Label title="Length" text={clockOf(seconds)} />
+          </Status>
+        }
         actions={
           <ActionPanel>
             <Action.Paste content={text} />
@@ -132,17 +147,20 @@ export default function Dictate() {
     ),
     NoSpeech: () => (
       <Detail
-        markdown={[
-          "# No speech was heard",
-          "",
-          "Nothing was transcribed. Check the microphone with **Test Microphone**, then try again.",
-        ].join("\n")}
+        markdown="Nothing was transcribed. Check the microphone with **Test Microphone**, then try again."
+        metadata={<Status label="No speech was heard" icon={Icon.MicrophoneDisabled} />}
         actions={<ActionPanel>{againAction}</ActionPanel>}
       />
     ),
     Failed: ({ message, signIn }) => (
       <Detail
-        markdown={["# Dictation did not finish", "", message].join("\n")}
+        markdown={message}
+        metadata={
+          <Status
+            label="Dictation did not finish"
+            icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }}
+          />
+        }
         actions={
           <ActionPanel>
             {signIn ? (
@@ -160,6 +178,27 @@ export default function Dictate() {
       />
     ),
   })
+}
+
+/** Steps in the side panel's level meter. Fewer steps mean fewer redraws. */
+const METER_STEPS = 8
+
+/** The side panel: the status first, then `children`. Every state uses it, so the layout stays put. */
+function Status({
+  label,
+  icon = Icon.Microphone,
+  children,
+}: {
+  readonly label: string
+  readonly icon?: Image.ImageLike
+  readonly children?: ReactNode
+}) {
+  return (
+    <Detail.Metadata>
+      <Detail.Metadata.Label title="Status" text={label} icon={icon} />
+      {children}
+    </Detail.Metadata>
+  )
 }
 
 const dictate = Effect.fn("dictate")(function* (
@@ -184,7 +223,9 @@ const dictate = Effect.fn("dictate")(function* (
   const shown = { key: "" }
   const show = () => {
     const key = [
-      view.finishing ? "finishing" : `${levelBar(view.level)} ${formatSeconds(view.seconds)}`,
+      view.finishing
+        ? "finishing"
+        : `${levelBar(view.level, METER_STEPS)} ${clockOf(view.seconds)}`,
       view.text,
       view.liveStopped,
     ].join("|")
@@ -220,9 +261,9 @@ const dictate = Effect.fn("dictate")(function* (
     setState(State.NoSpeech())
     return
   }
-  const text = transcript.value.text
+  const { text, seconds } = transcript.value
   const delivered = yield* deliver(text, settings.afterDictation)
-  setState(State.Done({ text, delivered }))
+  setState(State.Done({ text, seconds, delivered }))
 })
 
 /**
@@ -248,15 +289,3 @@ const copy = (text: string) =>
     await Clipboard.copy(text)
     await showHUD("Copied the dictation")
   }).pipe(Effect.ignore, Effect.as("copied" as const))
-
-const formatSeconds = (seconds: number): string =>
-  seconds < 60
-    ? `${seconds.toFixed(1)} s`
-    : `${Math.floor(seconds / 60)} min ${Math.floor(seconds % 60)} s`
-
-/** The text as a Markdown block quote. */
-const quote = (text: string): string =>
-  text
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n")
