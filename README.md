@@ -8,13 +8,24 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | ------------------------------------------------ | ------- |
 | Sign in and sign out with your Grok subscription | Done    |
 | Microphone recorder (Test Microphone)            | Done    |
-| Dictate (record, then transcribe)                | Planned |
+| Dictate (record, then transcribe)                | Done    |
 | Live dictation with partial text                 | Planned |
 | Read selected text aloud                         | Planned |
 
 ## Microphone
 
 Grokcast records with a small Swift helper that ships inside the extension, so you do not need to install anything. The first time it records, macOS asks to let Raycast (or Tinycast) use the microphone. **Test Microphone** records a few seconds and tells you whether Grokcast can hear you. Audio is not saved.
+
+## Dictation
+
+**Dictate** listens until you press Return, then sends the recording to xAI speech-to-text with your subscription and pastes the text into the app you were using. Press Esc to cancel. Recording stops on its own after 5 minutes.
+
+Set these in the extension preferences:
+
+- **Dictation Language**: the language you speak, or Detect Automatically.
+- **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language.
+- **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
+- **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
 
 ## How sign-in works
 

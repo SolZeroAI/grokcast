@@ -9,52 +9,15 @@ import * as TestClock from "effect/testing/TestClock"
 import {
   durationOfBytes,
   exitFromCode,
+  levelBar,
   levelDbfs,
   MicrophonePermission,
   Recorder,
   RecorderExit,
   RecorderLauncher,
   type MicrophoneAccess,
-  type RecorderEvents,
-  type RecorderProcess,
 } from "../src/lib/recorder.ts"
-
-/** A stand-in for the Swift recorder process. */
-class FakeRecorder {
-  finished = false
-  killed = false
-  private readonly script: Array<(events: RecorderEvents) => void> = []
-
-  /** `exitOnFinish` is false for a recorder that hangs when told to stop. */
-  constructor(private readonly exitOnFinish = true) {}
-
-  /** Queue audio chunks to send once the recorder starts. */
-  speak(...chunks: ReadonlyArray<Uint8Array>) {
-    this.script.push((events) => chunks.forEach(events.audio))
-    return this
-  }
-
-  /** Queue an exit to report once the recorder starts. */
-  exitWith(exit: RecorderExit) {
-    this.script.push((events) => events.exit(exit))
-    return this
-  }
-
-  /** Called by the fake launcher. The script plays on a later tick, like a real process. */
-  start(events: RecorderEvents): RecorderProcess {
-    setImmediate(() => this.script.forEach((step) => step(events)))
-    return {
-      finish: () => {
-        this.finished = true
-        if (this.exitOnFinish) setImmediate(() => events.exit(RecorderExit.Finished()))
-      },
-      kill: () => {
-        this.killed = true
-        events.exit(RecorderExit.Failed({ message: "killed" }))
-      },
-    }
-  }
-}
+import { chunk, FakeRecorder } from "./fake-recorder.ts"
 
 interface Setup {
   readonly access?: MicrophoneAccess
@@ -99,12 +62,6 @@ function setup({ access = "authorized", grant = true, recorder = new FakeRecorde
 const record = Recorder.use((recorder) => Effect.succeed(recorder.record))
 const collect = (take: number) =>
   Effect.flatMap(record, (audio) => Stream.runCollect(Stream.take(audio, take)))
-
-const chunk = (...samples: ReadonlyArray<number>) => {
-  const view = new DataView(new ArrayBuffer(samples.length * 2))
-  samples.forEach((sample, index) => view.setInt16(index * 2, sample, true))
-  return new Uint8Array(view.buffer)
-}
 
 describe("Recorder.record", () => {
   it("starts the recorder at 16 kHz with a time limit, streams its audio, and stops it when done", async () => {
@@ -201,5 +158,13 @@ describe("levelDbfs", () => {
 describe("durationOfBytes", () => {
   it("counts 32,000 bytes as one second of 16 kHz 16-bit mono audio", () => {
     assert.equal(durationOfBytes(32_000), 1)
+  })
+})
+
+describe("levelBar", () => {
+  it("is empty at -60 dBFS and below, and full at 0 dBFS", () => {
+    assert.equal(levelBar(Number.NEGATIVE_INFINITY), "░".repeat(20))
+    assert.equal(levelBar(0), "█".repeat(20))
+    assert.equal(levelBar(-30), "█".repeat(10) + "░".repeat(10))
   })
 })

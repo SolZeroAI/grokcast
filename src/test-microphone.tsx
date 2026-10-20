@@ -7,7 +7,7 @@ import * as Match from "effect/Match"
 import * as Stream from "effect/Stream"
 import { useEffect, useRef, useState } from "react"
 import { GrokRuntime } from "./lib/grok.ts"
-import { durationOfBytes, levelDbfs, Recorder } from "./lib/recorder.ts"
+import { durationOfBytes, levelBar, levelDbfs, Recorder } from "./lib/recorder.ts"
 
 /** The test stops on its own after this long. */
 const MAX_DURATION = Duration.seconds(5)
@@ -58,7 +58,7 @@ export default function TestMicrophone() {
           "",
           "Say a few words. The test stops after 5 seconds.",
           "",
-          `\`${meter(level)}\` ${seconds.toFixed(1)} s`,
+          `\`${levelBar(level)}\` ${seconds.toFixed(1)} s`,
         ].join("\n")}
         actions={
           <ActionPanel>
@@ -119,12 +119,6 @@ const testMicrophone = Effect.fn("testMicrophone")(function* (
   )
   setState(State.Done({ seconds: durationOfBytes(totals.bytes), peak: totals.peak }))
 })
-
-/** A 20-step bar for a level between -60 dBFS and 0 dBFS. */
-const meter = (level: number): string => {
-  const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * 20)
-  return "█".repeat(filled) + "░".repeat(20 - filled)
-}
 
 const formatDb = (level: number): string =>
   Match.value(Number.isFinite(level)).pipe(
