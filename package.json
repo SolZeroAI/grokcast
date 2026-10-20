@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "grok",
+  "name": "grokcast",
   "version": "0.0.0",
   "private": true,
   "description": "Use Grok in Raycast with your own Grok or X subscription and the official xAI SDK. No API key needed.",
@@ -59,14 +59,14 @@
     {
       "name": "sign-in",
       "title": "Sign in to Grok",
-      "subtitle": "Grok",
+      "subtitle": "Grokcast",
       "description": "Sign in with your Grok or X subscription. No API key needed.",
       "mode": "view"
     },
     {
       "name": "sign-out",
       "title": "Sign out of Grok",
-      "subtitle": "Grok",
+      "subtitle": "Grokcast",
       "description": "Sign out and revoke this device's Grok sign-in.",
       "mode": "no-view"
     }
@@ -80,5 +80,5 @@
       "required": false
     }
   ],
-  "title": "Grok (Chat, Voice, Image, Video)"
+  "title": "Grokcast (xAI sub for Chat, Voice, Image, and Video)"
 }

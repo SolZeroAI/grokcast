@@ -97,7 +97,7 @@ describe("requestDeviceCode", () => {
     const sent = formOf(fetch, 0)
     assert.equal(sent.get("client_id"), DEFAULT_CLIENT_ID)
     assert.equal(sent.get("scope"), XAI_SCOPES)
-    assert.equal(sent.get("referrer"), "grok-voice")
+    assert.equal(sent.get("referrer"), "grokcast")
   })
 
   it("returns the OAuth error code from a refused request", async () => {

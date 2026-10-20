@@ -7,7 +7,7 @@ import {
   type TegamiPlugin,
 } from "tegami"
 
-const PACKAGE_NAME = "grok"
+const PACKAGE_NAME = "grokcast"
 
 interface ReleaseTarget {
   tag: string
@@ -68,7 +68,7 @@ function releaseTarget(context: TegamiContext, plan: PublishPlan): ReleaseTarget
     return {
       tag,
       version: pkg.version,
-      title: `Grok v${pkg.version}`,
+      title: `Grokcast v${pkg.version}`,
       notes: notes || `Published ${pkg.name} v${pkg.version}.`,
       prerelease: pkg.version.includes("-"),
     }
@@ -77,7 +77,7 @@ function releaseTarget(context: TegamiContext, plan: PublishPlan): ReleaseTarget
 }
 
 function repository(): string {
-  const repo = process.env.GITHUB_REPOSITORY?.trim() || "SolZeroAI/raycast-grok-voice"
+  const repo = process.env.GITHUB_REPOSITORY?.trim() || "SolZeroAI/grokcast"
   const [owner, name] = repo.split("/", 2)
   if (!owner || !name || repo.split("/").length !== 2) {
     throw new Error(`GITHUB_REPOSITORY must be owner/name. Received ${JSON.stringify(repo)}.`)

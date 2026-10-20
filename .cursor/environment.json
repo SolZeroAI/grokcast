@@ -1,5 +1,5 @@
 {
-  "name": "raycast-grok-voice",
+  "name": "grokcast",
   "install": "./scripts/cloud-agent-install.sh",
   "start": "./scripts/cloud-agent-start.sh"
 }

@@ -30,8 +30,8 @@ export const DEFAULT_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
 /** `api:access` is what lets the token call `api.x.ai`. Without it, sign-in works and API calls fail. */
 export const XAI_SCOPES = "openid profile email offline_access grok-cli:access api:access"
 
-/** Sent with each authorization request so xAI can attribute traffic to this extension. Sign-in was verified with this value. */
-export const REFERRER = "grok-voice"
+/** Sent with each authorization request so xAI can attribute traffic to this extension. */
+export const REFERRER = "grokcast"
 
 /** An OAuth error response, or a response this module could not use. `code` is the OAuth `error` value when there is one. */
 export class OAuthError extends Schema.TaggedError<OAuthError>()("OAuthError", {

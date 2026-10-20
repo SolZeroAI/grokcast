@@ -5,8 +5,8 @@ import { runCli } from "tegami/cli"
 import { github } from "tegami/plugins/github"
 import { githubRelease } from "./github-release.mts"
 
-const repository = process.env.GITHUB_REPOSITORY?.trim() || "SolZeroAI/raycast-grok-voice"
-const publishedPackageId = "npm:grok"
+const repository = process.env.GITHUB_REPOSITORY?.trim() || "SolZeroAI/grokcast"
+const publishedPackageId = "npm:grokcast"
 
 const release = tegami({
   conventionalCommits: false,
@@ -28,7 +28,7 @@ const release = tegami({
             entry.sections.flatMap((section) => [`### ${section.title}`, "", section.content, ""]),
           )
           return {
-            title: `Grok v${pkg.version}`,
+            title: `Grokcast v${pkg.version}`,
             notes: sections.join("\n").trim(),
           }
         },

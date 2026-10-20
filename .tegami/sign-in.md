@@ -1,6 +1,6 @@
 ---
 packages:
-  npm:grok:
+  npm:grokcast:
     type: minor
 ---
 
