@@ -1,10 +1,11 @@
-// Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID from
-// preferences, and the Swift microphone helper from the extension's assets.
+// Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID and
+// dictation settings from preferences, the dictation history in LocalStorage, and
+// the Swift microphone helper from the extension's assets.
 
 import { spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
 import { join } from "node:path"
-import { environment, getPreferenceValues, OAuth } from "@raycast/api"
+import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
@@ -13,6 +14,14 @@ import * as Option from "effect/Option"
 import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as FetchHttpClient from "effect/http/FetchHttpClient"
+import * as KeyValueStore from "effect/persistence/KeyValueStore"
+import {
+  AfterDictation,
+  DictationPreferences,
+  DictationSettings,
+  languageFromPreference,
+} from "./dictation.ts"
+import { DictationHistory } from "./history.ts"
 import { ClientId, DEFAULT_CLIENT_ID, XaiEndpoints } from "./oauth.ts"
 import {
   exitFromCode,
@@ -24,6 +33,7 @@ import {
   RecorderLauncher,
 } from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
+import { Transcriber } from "./transcriber.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `sign-in.tsx`,
@@ -74,15 +84,63 @@ export const RaycastTokenStore = Layer.succeed(
   }),
 )
 
-const Preferences = Schema.Struct({ clientId: Schema.OptionFromOptionalKey(Schema.String) })
+const Preferences = Schema.Struct({
+  clientId: Schema.OptionFromOptionalKey(Schema.String),
+  language: Schema.OptionFromOptionalKey(Schema.String),
+  formatNumbers: Schema.OptionFromOptionalKey(Schema.Boolean),
+  afterDictation: Schema.OptionFromOptionalKey(AfterDictation),
+  keepHistory: Schema.OptionFromOptionalKey(Schema.Boolean),
+})
+
+const preferences = () => Schema.decodeUnknownOption(Preferences)(getPreferenceValues())
 
 export const RaycastClientId = Layer.sync(ClientId, () =>
-  Schema.decodeUnknownOption(Preferences)(getPreferenceValues()).pipe(
-    Option.flatMap((preferences) => preferences.clientId),
+  preferences().pipe(
+    Option.flatMap((values) => values.clientId),
     Option.map((clientId) => clientId.trim()),
     Option.filter((clientId) => clientId !== ""),
     Option.getOrElse(() => DEFAULT_CLIENT_ID),
   ),
+)
+
+/** Defaults match the preferences in `package.json`. */
+export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () => {
+  const values = preferences()
+  const value = <A>(pick: (decoded: typeof Preferences.Type) => Option.Option<A>, fallback: A) =>
+    values.pipe(
+      Option.flatMap(pick),
+      Option.getOrElse(() => fallback),
+    )
+  return new DictationSettings({
+    language: languageFromPreference(value((decoded) => decoded.language, "en")),
+    formatNumbers: value((decoded) => decoded.formatNumbers, true),
+    afterDictation: value((decoded) => decoded.afterDictation, "paste"),
+    keepHistory: value((decoded) => decoded.keepHistory, true),
+  })
+})
+
+const storageCall = <A>(method: string, call: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: call,
+    catch: (cause) =>
+      new KeyValueStore.KeyValueStoreError({
+        method,
+        message: "Could not use Raycast's local storage.",
+        cause,
+      }),
+  })
+
+/** Raycast's LocalStorage: encrypted, on this Mac, and only for this extension. */
+export const RaycastKeyValueStore = Layer.sync(KeyValueStore.KeyValueStore, () =>
+  KeyValueStore.makeStringOnly({
+    get: (key) => storageCall("get", () => LocalStorage.getItem<string>(key)),
+    set: (key, value) => storageCall("set", () => LocalStorage.setItem(key, value)),
+    remove: (key) => storageCall("remove", () => LocalStorage.removeItem(key)),
+    clear: storageCall("clear", () => LocalStorage.clear()),
+    size: storageCall("size", () => LocalStorage.allItems()).pipe(
+      Effect.map((items) => Object.keys(items).length),
+    ),
+  }),
 )
 
 const helperCall = <A>(call: () => Promise<A>) =>
@@ -139,9 +197,13 @@ export const RaycastRecorderLauncher = Layer.succeed(
   }),
 )
 
-/** Everything a command needs: xAI as the signed-in user, and the microphone. */
+/**
+ * Everything a command needs: xAI as the signed-in user, speech-to-text, the
+ * microphone, and the dictation preferences and history.
+ */
 export const GrokLive = Layer.mergeAll(
-  GrokSession.layer.pipe(
+  Transcriber.layer.pipe(
+    Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(XaiEndpoints.layer),
     Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),
     Layer.provideMerge(FetchHttpClient.layer),
@@ -149,6 +211,8 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
+  DictationHistory.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  RaycastDictationPreferences,
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */

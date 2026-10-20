@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
+import * as P from "effect/Predicate"
 import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as Semaphore from "effect/Semaphore"
@@ -85,11 +86,19 @@ export const needsRefresh = (tokens: StoredTokens, now: number): boolean =>
 const sameToken = (a: Redacted.Redacted<string>, b: Redacted.Redacted<string>): boolean =>
   Redacted.value(a) === Redacted.value(b)
 
+// Tinycast's Request drops the signal of a Request it copies unless it is passed again.
 const withBearer = (request: Request, token: Redacted.Redacted<string>): Request => {
   const headers = new Headers(request.headers)
   headers.set("authorization", `Bearer ${Redacted.value(token)}`)
-  return new Request(request, { headers })
+  return new Request(request, { headers, signal: request.signal })
 }
+
+/**
+ * A copy of `request` to send again after a 401. Tinycast's Request has no `clone`,
+ * but Tinycast can send the same body twice, so a plain copy is enough there.
+ */
+const copyRequest = (request: Request): Request =>
+  P.isFunction(request.clone) ? request.clone() : new Request(request, { signal: request.signal })
 
 export type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
@@ -184,7 +193,7 @@ const make = Effect.fn("GrokSession.make")(function* () {
     })
 
   const authorizedFetch = Effect.fn("GrokSession.fetch")(function* (request: Request) {
-    const retry = request.clone()
+    const retry = copyRequest(request)
     const token = yield* accessToken
     const response = yield* sendRaw(withBearer(request, token))
     if (response.status !== 401) return response

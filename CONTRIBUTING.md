@@ -33,6 +33,15 @@ Try each user-facing change in Raycast and in Tinycast before you merge it. Tiny
 - To stop, send SIGTERM. Do not use stdin: Tinycast closes it as soon as the process starts. The recorder also stops on SIGINT, when its parent process exits, and after the time limit (the last argument, in seconds). `Recorder` kills it if it has not exited 2 seconds after SIGTERM.
 - macOS asks for microphone access for the host app (Raycast or Tinycast), not for the recorder. `Recorder.ensureAccess` shows the prompt the first time and fails with `RecorderError` (`reason: "denied"`) when access is off.
 
+## xAI SDK
+
+Requests to xAI go through `@xai-official/sdk` (pinned exactly). `Transcriber` in `src/lib/transcriber.ts` creates the `SpaceXAI` client on first use:
+
+- The SDK will not start without an API key, so it gets a placeholder. `GrokSession.fetch` replaces the authorization header with the user's OAuth token on every request. Never pass a real API key.
+- Tinycast reports Node 22.0.0 (and sets `process.versions.tinycast`), which fails the SDK's Node 22.13 check. In Tinycast only, `Transcriber` raises the reported version while the constructor runs, then puts it back.
+- Tinycast's `Request` has no `clone()`, so `GrokSession.fetch` copies a request with `new Request(request)` there. Tinycast can send the same body twice; Node cannot, so Node still uses `clone()`.
+- Speech-to-text sends raw PCM (`audio_format: "pcm"`, `sample_rate: 16000`) as one multipart request. A 429 is not retried, because on a subscription it usually means the usage limit.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

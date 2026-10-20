@@ -10,5 +10,7 @@ Flag these:
 - A change that clears the sign-in on a network error or a 5xx. Only `invalid_grant` means the sign-in is gone.
 - Node APIs that Tinycast does not provide, such as `child_process.fork` or `worker_threads`.
 - Audio or transcripts written to disk without the user asking for history.
-- A recording path that can leave the Swift recorder running after the stream ends, the command closes, or an error. The recorder must stop when its stdin closes.
+- A recording path that can leave the Swift recorder running after the stream ends, the command closes, or an error. The extension stops the recorder with SIGTERM, not by closing stdin (Tinycast closes stdin at once).
+- A real API key passed to `SpaceXAI`. The key in `src/lib/transcriber.ts` is a placeholder; `GrokSession.fetch` replaces the authorization header with the user's OAuth token.
+- A change to `process.versions` that is not limited to Tinycast and put back after the SDK client starts.
 - A committed binary under `assets/`. The recorder is built from `recorder/` by `ray build`.

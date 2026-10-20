@@ -19,7 +19,8 @@ concurrency:
 jobs:
   validate:
     name: Typecheck, lint, format, and test
-    runs-on: ubuntu-24.04
+    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -56,7 +57,9 @@ jobs:
   build:
     name: Build the extension and the Swift recorder
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
-    runs-on: macos-15
+    # Blacksmith's M4 runner, as in SolZeroAI/gtt-app. GitHub's macos-15 queue left this job
+    # without a runner until it was cancelled (2026-10-20).
+    runs-on: blacksmith-6vcpu-macos-26
     timeout-minutes: 20
     steps:
       - name: Checkout

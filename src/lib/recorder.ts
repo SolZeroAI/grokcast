@@ -181,3 +181,9 @@ export const levelDbfs = (chunk: Uint8Array): number => {
 
 /** Seconds of audio in `bytes` of recorder output. */
 export const durationOfBytes = (bytes: number): number => bytes / (SAMPLE_RATE * BYTES_PER_SAMPLE)
+
+/** A 20-step text meter for a level between -60 dBFS and 0 dBFS. */
+export const levelBar = (level: number): string => {
+  const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * 20)
+  return "█".repeat(filled) + "░".repeat(20 - filled)
+}

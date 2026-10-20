@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@raycast/api": "2.8.2",
+    "@xai-official/sdk": "0.2.4",
     "effect": "4.0.5"
   },
   "devDependencies": {
@@ -65,6 +66,20 @@
       "mode": "view"
     },
     {
+      "name": "dictate",
+      "title": "Dictate",
+      "subtitle": "Grokcast",
+      "description": "Speak, then paste the text into the app you were using. Transcribed by Grok with your subscription.",
+      "mode": "view"
+    },
+    {
+      "name": "dictation-history",
+      "title": "Dictation History",
+      "subtitle": "Grokcast",
+      "description": "Search, paste, or copy your past dictations.",
+      "mode": "view"
+    },
+    {
       "name": "test-microphone",
       "title": "Test Microphone",
       "subtitle": "Grokcast",
@@ -80,6 +95,116 @@
     }
   ],
   "preferences": [
+    {
+      "name": "language",
+      "title": "Dictation Language",
+      "description": "The language you speak. Detect Automatically works for most languages, but number formatting needs a language.",
+      "type": "dropdown",
+      "required": false,
+      "default": "en",
+      "data": [
+        {
+          "title": "Detect Automatically",
+          "value": "auto"
+        },
+        {
+          "title": "English",
+          "value": "en"
+        },
+        {
+          "title": "Spanish",
+          "value": "es"
+        },
+        {
+          "title": "French",
+          "value": "fr"
+        },
+        {
+          "title": "German",
+          "value": "de"
+        },
+        {
+          "title": "Italian",
+          "value": "it"
+        },
+        {
+          "title": "Portuguese",
+          "value": "pt"
+        },
+        {
+          "title": "Dutch",
+          "value": "nl"
+        },
+        {
+          "title": "Polish",
+          "value": "pl"
+        },
+        {
+          "title": "Russian",
+          "value": "ru"
+        },
+        {
+          "title": "Turkish",
+          "value": "tr"
+        },
+        {
+          "title": "Arabic",
+          "value": "ar"
+        },
+        {
+          "title": "Hindi",
+          "value": "hi"
+        },
+        {
+          "title": "Japanese",
+          "value": "ja"
+        },
+        {
+          "title": "Korean",
+          "value": "ko"
+        },
+        {
+          "title": "Chinese",
+          "value": "zh"
+        }
+      ]
+    },
+    {
+      "name": "formatNumbers",
+      "title": "Formatting",
+      "label": "Write numbers as digits",
+      "description": "Write spoken numbers, currencies, and units as digits, such as $25 instead of twenty-five dollars. Needs a dictation language.",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
+    {
+      "name": "afterDictation",
+      "title": "After Dictation",
+      "description": "Paste the text into the app you were using, or only copy it to the clipboard.",
+      "type": "dropdown",
+      "required": false,
+      "default": "paste",
+      "data": [
+        {
+          "title": "Paste into the Frontmost App",
+          "value": "paste"
+        },
+        {
+          "title": "Copy to the Clipboard",
+          "value": "copy"
+        }
+      ]
+    },
+    {
+      "name": "keepHistory",
+      "title": "History",
+      "label": "Keep dictation history",
+      "description": "Keep the text of your last 100 dictations on this Mac. Audio is never saved.",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
     {
       "name": "clientId",
       "title": "OAuth Client ID",
