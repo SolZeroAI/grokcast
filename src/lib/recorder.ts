@@ -23,6 +23,9 @@ export const BYTES_PER_SAMPLE = 2
 /** How long to wait for the recorder to exit after it is told to stop. */
 const STOP_GRACE = Duration.seconds(2)
 
+/** The recorder stops by itself after this long, in case nothing stops it. */
+export const MAX_RECORDING = Duration.minutes(10)
+
 export const MicrophoneAccess = Schema.Literals([
   "authorized",
   "denied",
@@ -76,7 +79,7 @@ export interface RecorderEvents {
 
 /** A running recorder process. */
 export interface RecorderProcess {
-  /** Close stdin. The recorder stops and exits. */
+  /** Send SIGTERM. The recorder stops and exits. */
   readonly finish: () => void
   /** End the recorder at once. */
   readonly kill: () => void
@@ -124,7 +127,7 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
         })
       },
     }
-    /** Close stdin so the recorder stops and exits; kill it when it does not. */
+    /** Tell the recorder to stop and exit; kill it when it does not. */
     const stop = (recorder: RecorderProcess) =>
       Effect.sync(recorder.finish).pipe(
         Effect.andThen(Deferred.await(exited)),
@@ -132,7 +135,11 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
       )
     return Effect.acquireRelease(
       Effect.try({
-        try: () => launcher.start(["record", String(SAMPLE_RATE)], events),
+        try: () =>
+          launcher.start(
+            ["record", String(SAMPLE_RATE), String(Duration.toSeconds(MAX_RECORDING))],
+            events,
+          ),
         catch: () => failed("Could not start the microphone recorder."),
       }),
       stop,

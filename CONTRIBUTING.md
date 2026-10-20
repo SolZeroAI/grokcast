@@ -29,8 +29,8 @@ Try each user-facing change in Raycast and in Tinycast before you merge it. Tiny
 `recorder/` is a Swift package built by `ray build` into `assets/compiled_raycast_swift/recorder` (git-ignored). No compiled binary is committed.
 
 - `microphoneAccess` and `requestMicrophoneAccess` are called through the generated `swift:` bindings. `src/swift.d.ts` declares them so `tsc` runs before a build.
-- `record` streams audio, which the bindings cannot do, so `RecorderLauncher` starts the binary as `recorder record 16000` and reads stdout: mono, signed 16-bit little-endian PCM at 16 kHz.
-- To stop, close the recorder's stdin. It also stops on SIGINT or SIGTERM, and when the extension goes away. `Recorder` kills it if it has not exited 2 seconds after stdin closes.
+- `record` streams audio, which the bindings cannot do, so `RecorderLauncher` starts the binary as `recorder record 16000 600` and reads stdout: mono, signed 16-bit little-endian PCM at 16 kHz.
+- To stop, send SIGTERM. Do not use stdin: Tinycast closes it as soon as the process starts. The recorder also stops on SIGINT, when its parent process exits, and after the time limit (the last argument, in seconds). `Recorder` kills it if it has not exited 2 seconds after SIGTERM.
 - macOS asks for microphone access for the host app (Raycast or Tinycast), not for the recorder. `Recorder.ensureAccess` shows the prompt the first time and fails with `RecorderError` (`reason: "denied"`) when access is off.
 
 ## Sign-in rules

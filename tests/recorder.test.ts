@@ -107,12 +107,12 @@ const chunk = (...samples: ReadonlyArray<number>) => {
 }
 
 describe("Recorder.record", () => {
-  it("starts the recorder at 16 kHz, streams its audio, and stops it when done", async () => {
+  it("starts the recorder at 16 kHz with a time limit, streams its audio, and stops it when done", async () => {
     const audio = [chunk(1, 2), chunk(3, 4), chunk(5, 6)]
     const { calls, recorder, run } = setup({ recorder: new FakeRecorder().speak(...audio) })
     const collected = await run(collect(2))
     assert.deepEqual(collected, audio.slice(0, 2))
-    assert.deepEqual(calls.started, [["record", "16000"]])
+    assert.deepEqual(calls.started, [["record", "16000", "600"]])
     assert.equal(recorder.finished, true)
     assert.equal(recorder.killed, false)
   })

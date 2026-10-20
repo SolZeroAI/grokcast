@@ -3,7 +3,7 @@
 //
 // `microphoneAccess` and `requestMicrophoneAccess` are called through the generated
 // TypeScript bindings. `record` streams audio, so the extension starts the binary
-// itself (`recorder record <sampleRate>`) and reads stdout as it arrives.
+// itself (`recorder record <sampleRate> <maxSeconds>`) and reads stdout as it arrives.
 
 import AVFoundation
 import Foundation
@@ -37,14 +37,16 @@ enum RecorderError: Error, LocalizedError {
   }
 }
 
-/// Kept for the life of the process so the signal handlers stay installed.
-private var signalSources: [any DispatchSourceSignal] = []
+/// Kept for the life of the process so the event handlers stay installed.
+private var eventSources: [any DispatchSourceProtocol] = []
 
 /// Streams mono, signed 16-bit little-endian PCM at `sampleRate` to stdout.
 ///
-/// Recording stops when stdin closes (the extension finished, or it went away) or on
-/// SIGINT or SIGTERM. The process then exits directly, so nothing follows the audio.
-@raycast func record(sampleRate: Double) async throws {
+/// Recording stops on SIGTERM or SIGINT, when the parent process exits, or after
+/// `maxSeconds`. The process then exits directly, so nothing follows the audio.
+///
+/// Stdin is not used: Tinycast closes it at once.
+@raycast func record(sampleRate: Double, maxSeconds: Double) async throws {
   let engine = AVAudioEngine()
   let input = engine.inputNode
   let inputFormat = input.outputFormat(forBus: 0)
@@ -93,17 +95,22 @@ private var signalSources: [any DispatchSourceSignal] = []
 
   signal(SIGINT, SIG_IGN)
   signal(SIGTERM, SIG_IGN)
-  signalSources = [SIGINT, SIGTERM].map { number in
+  eventSources = [SIGINT, SIGTERM].map { number -> any DispatchSourceProtocol in
     let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
     source.setEventHandler { stop() }
     source.resume()
     return source
   }
 
-  DispatchQueue.global(qos: .userInitiated).async {
-    _ = FileHandle.standardInput.readDataToEndOfFile()
-    stop()
-  }
+  // Stop when the extension goes away without stopping the recorder.
+  let parent = DispatchSource.makeProcessSource(
+    identifier: getppid(), eventMask: .exit, queue: .global())
+  parent.setEventHandler { stop() }
+  parent.resume()
+  eventSources.append(parent)
+  if getppid() == 1 { stop() }
+
+  DispatchQueue.global().asyncAfter(deadline: .now() + maxSeconds) { stop() }
 
   // Wait. `stop` ends the process.
   while true {

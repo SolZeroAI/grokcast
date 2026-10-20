@@ -127,7 +127,10 @@ export const RaycastRecorderLauncher = Layer.succeed(
         events.exit(exitFromCode(Option.fromNullishOr(code), stderr.join(""))),
       )
       return {
-        finish: () => child.stdin.end(),
+        // Not stdin: Tinycast closes it at once.
+        finish: () => {
+          child.kill("SIGTERM")
+        },
         kill: () => {
           child.kill("SIGKILL")
         },
