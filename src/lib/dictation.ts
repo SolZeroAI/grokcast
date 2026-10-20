@@ -1,22 +1,30 @@
-// Dictation: record until told to stop, then transcribe with xAI and keep the text
-// in the history. No Raycast imports, so tests run it under plain Node.
+// Dictation: record until told to stop while xAI transcribes live, then keep the
+// text in the history. When live transcription stops, the whole recording is sent
+// instead. No Raycast imports, so tests run it under plain Node.
 
 import * as Arr from "effect/Array"
+import * as Cause from "effect/Cause"
 import * as Context from "effect/Context"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
+import * as Fiber from "effect/Fiber"
 import * as Option from "effect/Option"
+import * as Queue from "effect/Queue"
 import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
 import { DictationHistory } from "./history.ts"
+import { LiveTranscriber } from "./live-transcriber.ts"
 import { durationOfBytes, levelDbfs, Recorder } from "./recorder.ts"
-import { Transcriber } from "./transcriber.ts"
+import { Transcriber, Transcript } from "./transcriber.ts"
 
 /** Recording stops on its own after this long and is transcribed. */
 export const MAX_DICTATION = Duration.minutes(5)
 
 /** A recording shorter than this is not sent to xAI. */
 export const MIN_DICTATION_SECONDS = 0.3
+
+/** After recording stops, how long to wait for the live text before sending the whole recording. */
+export const LIVE_FINISH_TIMEOUT = Duration.seconds(10)
 
 export const AfterDictation = Schema.Literals(["paste", "copy"])
 export type AfterDictation = typeof AfterDictation.Type
@@ -55,11 +63,11 @@ export const joinChunks = (chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayB
 
 /**
  * Record until `stop` completes or `MAX_DICTATION` passes. `onAudio` gets the
- * seconds recorded so far and the level of each chunk, for a meter.
+ * seconds recorded so far, the level of each chunk for a meter, and the chunk.
  */
 export const recordSpeech = Effect.fn("recordSpeech")(function* (
   stop: Effect.Effect<void>,
-  onAudio: (seconds: number, level: number) => void,
+  onAudio: (seconds: number, level: number, chunk: Uint8Array) => void,
 ) {
   const recorder = yield* Recorder
   const recorded = yield* recorder.record.pipe(
@@ -68,7 +76,7 @@ export const recordSpeech = Effect.fn("recordSpeech")(function* (
       () => ({ chunks: Arr.empty<Uint8Array>(), bytes: 0 }),
       (total, chunk) => {
         const bytes = total.bytes + chunk.byteLength
-        onAudio(durationOfBytes(bytes), levelDbfs(chunk))
+        onAudio(durationOfBytes(bytes), levelDbfs(chunk), chunk)
         return { chunks: Arr.append(total.chunks, chunk), bytes }
       },
     ),
@@ -79,23 +87,71 @@ export const recordSpeech = Effect.fn("recordSpeech")(function* (
   } satisfies Recording
 })
 
-/**
- * Transcribe a recording with the user's preferences. Non-empty text goes into the
- * history when the user keeps one; a history that cannot be saved does not fail this.
- */
-export const transcribeSpeech = Effect.fn("transcribeSpeech")(function* (recording: Recording) {
+/** Transcribe a whole recording with the user's preferences, in one request. */
+export const transcribeRecording = Effect.fn("transcribeRecording")(function* (
+  recording: Recording,
+) {
   const settings = yield* DictationPreferences
   const transcriber = yield* Transcriber
-  const transcript = yield* transcriber.transcribe(recording.audio, {
+  return yield* transcriber.transcribe(recording.audio, {
     language: settings.language,
     formatNumbers: settings.formatNumbers,
   })
-  if (settings.keepHistory && transcript.text !== "") {
+})
+
+/** What `dictateSpeech` reports while it runs. */
+export interface DictationProgress {
+  /** Seconds recorded so far and the level of the last chunk, for a meter. */
+  readonly audio: (seconds: number, level: number) => void
+  /** Everything heard so far. */
+  readonly text: (text: string) => void
+  /** Live text stopped. The text comes after recording stops. */
+  readonly liveStopped: () => void
+  /** Recording stopped after `seconds`, and the text is being finished. */
+  readonly finishing: (seconds: number) => void
+}
+
+/**
+ * Record until `stop` completes and transcribe live while the user speaks. When live
+ * transcription stops, or gives no text, the whole recording is sent in one request.
+ * Non-empty text goes into the history when the user keeps one; a history that
+ * cannot be saved does not fail this. None means no speech was heard.
+ */
+export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
+  stop: Effect.Effect<void>,
+  progress: DictationProgress,
+) {
+  const settings = yield* DictationPreferences
+  const live = yield* LiveTranscriber
+  const audio = yield* Queue.unbounded<Uint8Array, Cause.Done>()
+  const liveText = yield* Effect.forkChild(
+    live.transcribe(Stream.fromQueue(audio), settings.language, progress.text).pipe(
+      Effect.tapError(() => Effect.sync(progress.liveStopped)),
+      Effect.option,
+    ),
+  )
+  const recording = yield* recordSpeech(stop, (seconds, level, chunk) => {
+    Queue.offerUnsafe(audio, chunk)
+    progress.audio(seconds, level)
+  }).pipe(Effect.ensuring(Queue.end(audio)))
+  if (recording.seconds < MIN_DICTATION_SECONDS) return Option.none<Transcript>()
+  progress.finishing(recording.seconds)
+
+  const heard = yield* Fiber.join(liveText).pipe(
+    Effect.timeoutOption(LIVE_FINISH_TIMEOUT),
+    Effect.map((text) => Option.filter(Option.flatten(text), (words) => words !== "")),
+  )
+  const transcript = yield* Option.match(heard, {
+    onSome: (text) => Effect.succeed(new Transcript({ text, seconds: recording.seconds })),
+    onNone: () => transcribeRecording(recording),
+  })
+  if (transcript.text === "") return Option.none<Transcript>()
+  if (settings.keepHistory) {
     yield* DictationHistory.use((history) => history.add(transcript.text, recording.seconds)).pipe(
       Effect.ignore,
     )
   }
-  return transcript
+  return Option.some(transcript)
 })
 
 /** The language to send, from a preference value where `auto` means detect it. */

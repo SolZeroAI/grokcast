@@ -13,20 +13,23 @@ import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
 import * as Match from "effect/Match"
+import * as Option from "effect/Option"
 import { useEffect, useRef, useState } from "react"
-import {
-  DictationPreferences,
-  MIN_DICTATION_SECONDS,
-  recordSpeech,
-  transcribeSpeech,
-} from "./lib/dictation.ts"
+import { DictationPreferences, dictateSpeech } from "./lib/dictation.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { levelBar } from "./lib/recorder.ts"
 
 type State = Data.TaggedEnum<{
   Starting: {}
-  Recording: { readonly seconds: number; readonly level: number }
-  Transcribing: { readonly seconds: number }
+  Recording: {
+    readonly seconds: number
+    readonly level: number
+    /** Everything heard so far. */
+    readonly text: string
+    /** Live text stopped; the text comes after recording stops. */
+    readonly liveStopped: boolean
+  }
+  Finishing: { readonly seconds: number; readonly text: string }
   Done: { readonly text: string; readonly delivered: "pasted" | "copied" }
   NoSpeech: {}
   Failed: { readonly message: string; readonly signIn: boolean }
@@ -74,15 +77,21 @@ export default function Dictate() {
 
   return State.$match(state, {
     Starting: () => <Detail isLoading markdown="Starting the microphone…" />,
-    Recording: ({ seconds, level }) => (
+    Recording: ({ seconds, level, text, liveStopped }) => (
       <Detail
         isLoading
         markdown={[
           "# Listening",
           "",
-          "Speak, then press **Return** to transcribe. Press **Esc** to cancel.",
-          "",
           `\`${levelBar(level)}\` ${formatSeconds(seconds)}`,
+          "",
+          liveStopped
+            ? "_Live text is not available. The text appears when you stop._"
+            : text === ""
+              ? "_Start speaking. The text appears here._"
+              : quote(text),
+          "",
+          "Press **Return** to stop and transcribe. Press **Esc** to cancel.",
         ].join("\n")}
         actions={
           <ActionPanel>
@@ -95,8 +104,15 @@ export default function Dictate() {
         }
       />
     ),
-    Transcribing: ({ seconds }) => (
-      <Detail isLoading markdown={`# Transcribing\n\n${formatSeconds(seconds)} of audio`} />
+    Finishing: ({ seconds, text }) => (
+      <Detail
+        isLoading
+        markdown={[
+          "# Finishing",
+          "",
+          text === "" ? `${formatSeconds(seconds)} of audio` : quote(text),
+        ].join("\n")}
+      />
     ),
     Done: ({ text, delivered }) => (
       <Detail
@@ -154,21 +170,48 @@ const dictate = Effect.fn("dictate")(function* (
   const stopped = Effect.callback<void>((resume) => {
     onStop(() => resume(Effect.void))
   })
-  const recording = yield* recordSpeech(stopped, (seconds, level) =>
-    setState(State.Recording({ seconds, level })),
-  )
-  if (recording.seconds < MIN_DICTATION_SECONDS) {
+  // Audio and text arrive separately; each update shows both. The last words can
+  // arrive after recording stops.
+  const view = {
+    seconds: 0,
+    level: Number.NEGATIVE_INFINITY,
+    text: "",
+    liveStopped: false,
+    finishing: false,
+  }
+  const show = () =>
+    setState(
+      view.finishing
+        ? State.Finishing({ seconds: view.seconds, text: view.text })
+        : State.Recording({ ...view }),
+    )
+  const transcript = yield* dictateSpeech(stopped, {
+    audio: (seconds, level) => {
+      view.seconds = seconds
+      view.level = level
+      show()
+    },
+    text: (text) => {
+      view.text = text
+      show()
+    },
+    liveStopped: () => {
+      view.liveStopped = true
+      show()
+    },
+    finishing: (seconds) => {
+      view.seconds = seconds
+      view.finishing = true
+      show()
+    },
+  })
+  if (Option.isNone(transcript)) {
     setState(State.NoSpeech())
     return
   }
-  setState(State.Transcribing({ seconds: recording.seconds }))
-  const transcript = yield* transcribeSpeech(recording)
-  if (transcript.text === "") {
-    setState(State.NoSpeech())
-    return
-  }
-  const delivered = yield* deliver(transcript.text, settings.afterDictation)
-  setState(State.Done({ text: transcript.text, delivered }))
+  const text = transcript.value.text
+  const delivered = yield* deliver(text, settings.afterDictation)
+  setState(State.Done({ text, delivered }))
 })
 
 /**

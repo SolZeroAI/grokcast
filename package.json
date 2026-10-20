@@ -26,13 +26,15 @@
   "dependencies": {
     "@raycast/api": "2.8.2",
     "@xai-official/sdk": "0.2.4",
-    "effect": "4.0.5"
+    "effect": "4.0.5",
+    "ws": "8.18.3"
   },
   "devDependencies": {
     "@mpsuesser/oxlint-plugin-effect": "0.6.0",
     "@oxlint/plugins": "1.87.0",
     "@types/node": "22.19.17",
     "@types/react": "19.0.10",
+    "@types/ws": "8.18.1",
     "anti-slop": "github:dmmulroy/anti-slop",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
@@ -69,7 +71,7 @@
       "name": "dictate",
       "title": "Dictate",
       "subtitle": "Grokcast",
-      "description": "Speak, then paste the text into the app you were using. Transcribed by Grok with your subscription.",
+      "description": "Speak and see the text as you go, then paste it into the app you were using. Transcribed by Grok with your subscription.",
       "mode": "view"
     },
     {

@@ -42,6 +42,17 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `Transcriber` i
 - Tinycast's `Request` has no `clone()`, so `GrokSession.fetch` copies a request with `new Request(request)` there. Tinycast can send the same body twice; Node cannot, so Node still uses `clone()`.
 - Speech-to-text sends raw PCM (`audio_format: "pcm"`, `sample_rate: 16000`) as one multipart request. A 429 is not retried, because on a subscription it usually means the usage limit.
 
+## Live speech-to-text
+
+The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `src/lib/live-transcriber.ts` talks to `wss://api.x.ai/v1/stt` with Effect's `Socket`:
+
+- Sockets come from the `ws` package (`WsWebSocketConstructor`), because it can send the `authorization` header. Raycast runs Node, and Tinycast supports `ws`.
+- The URL sets `sample_rate=16000`, `encoding=pcm`, `interim_results=true`, `endpointing=400`, and the language when there is one. With a language, xAI writes numbers as digits.
+- Wait for `transcript.created` before sending audio. Send PCM as binary frames, then the text frame `{"type":"audio.done"}`.
+- `transcript.partial` events carry the piece of speech in progress. `is_final` marks a piece that will not change. `speech_final` ends an utterance, and its text restates the whole utterance. `transcript.done` has come back with empty text, so the text comes from the partials (`addPartial`, `textOf`).
+- xAI drops the connection without a close frame (1006) after the last event. After `audio.done` was sent, any close ends the transcript normally. Before that, a close is a failure.
+- `dictateSpeech` records into the live session and keeps the audio. When the live session fails, gives no text, or does not finish within 10 seconds after recording stops, it sends the whole recording with `Transcriber` instead.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

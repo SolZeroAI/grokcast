@@ -9,7 +9,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Sign in and sign out with your Grok subscription | Done    |
 | Microphone recorder (Test Microphone)            | Done    |
 | Dictate (record, then transcribe)                | Done    |
-| Live dictation with partial text                 | Planned |
+| Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
 
 ## Microphone
@@ -18,12 +18,14 @@ Grokcast records with a small Swift helper that ships inside the extension, so y
 
 ## Dictation
 
-**Dictate** listens until you press Return, then sends the recording to xAI speech-to-text with your subscription and pastes the text into the app you were using. Press Esc to cancel. Recording stops on its own after 5 minutes.
+**Dictate** listens until you press Return and shows the text while you speak. Then it pastes the text into the app you were using. Press Esc to cancel. Recording stops on its own after 5 minutes.
+
+The live text comes from xAI's streaming speech-to-text, with your subscription. If the live connection stops, Dictate keeps recording and sends the whole recording to xAI when you stop, so you still get your text.
 
 Set these in the extension preferences:
 
 - **Dictation Language**: the language you speak, or Detect Automatically.
-- **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language.
+- **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
 
