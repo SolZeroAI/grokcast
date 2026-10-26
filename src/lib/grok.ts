@@ -45,6 +45,7 @@ import {
   speedFromPreference,
 } from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
+import { ReadAloudVoice, VoiceLibrary } from "./voices.ts"
 import { XaiClient } from "./xai.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
@@ -273,11 +274,12 @@ export const RaycastAudioLauncher = Layer.succeed(
 
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), text-to-speech and its player, the microphone, and the dictation
- * and Read Aloud preferences and the dictation history.
+ * in one request), text-to-speech and its player, built-in and custom voices, the
+ * microphone, the dictation and Read Aloud preferences, the voice picked for Read
+ * Aloud, and the dictation history.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Speaker.layer).pipe(
+  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Speaker.layer, VoiceLibrary.layer).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
     Layer.provideMerge(GrokSession.layer),
@@ -288,7 +290,7 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer).pipe(
+  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer, ReadAloudVoice.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher)),
   ),
   RaycastDictationPreferences,

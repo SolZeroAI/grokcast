@@ -11,6 +11,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Dictate (record, then transcribe)                | Done  |
 | Live dictation with partial text                 | Done  |
 | Read selected text aloud                         | Done  |
+| Grok Voices and custom voices                    | Done  |
 
 ## Microphone
 
@@ -42,6 +43,15 @@ Set these in the command preferences:
 - **Voice**: one of Grok's voices, or xAI Default.
 - **Speed**: from 0.7× to 1.5×, or xAI Default.
 - **Reading Language**: the language of the text, or Detect Automatically.
+
+## Voices
+
+**Grok Voices** lists your custom voices and Grok's built-in voices. The side panel shows each voice's ID, language, gender, and the other labels xAI keeps.
+
+- **Preview Voice** reads a short sentence in that voice, with your Read Aloud speed and language. ⌘. stops it.
+- **Use for Read Aloud** (⌘U) makes Read Aloud use that voice instead of its Voice preference. This is how Read Aloud gets a custom voice. **Stop Using for Read Aloud** goes back to the preference.
+- **Record a New Voice** (⌘N) records up to 2 minutes of your voice, then makes a custom voice from it at xAI. **New Voice from Audio File** (⌘⇧N) does the same from a clip you already have. Only use your own voice, or one you have permission to use.
+- **Edit Voice** (⌘E) changes a custom voice's name and labels. **Delete Voice** (⌃X) deletes it at xAI.
 
 ## How sign-in works
 

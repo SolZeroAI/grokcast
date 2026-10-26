@@ -60,6 +60,14 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - `RaycastAudioLauncher` writes the audio to `read-aloud.mp3` in the extension's support folder and plays it with `/usr/bin/afplay`, detached so it outlives the command. Stop it with SIGTERM.
 - `read-aloud.tsx` is a no-view command. It reads its argument, then the selection, then the clipboard (`firstText`), and stops at the first with text.
 
+## Voices
+
+- `VoiceLibrary` in `src/lib/voices.ts` lists `xai.voice.list()` (built-in) and `xai.voice.custom.list()` at the same time. The custom list is a `PagePromise`, read with `Stream.fromAsyncIterable` so the SDK follows `pagination_token`, up to 500 voices.
+- `create` sends the clip as a `File`, so xAI gets its file name and reads the format from it, with only the labels that are set. `update` sends every label, with `null` for an empty one, because xAI clears a label only on `null`.
+- A recording is mono 16 kHz PCM from `Recorder`. `wavOf` adds a WAV header before upload. `RecordVoice` stops at 120 seconds, xAI's limit.
+- `ReadAloudVoice` keeps the voice picked with Use for Read Aloud in LocalStorage. `readAloud` uses it instead of the Voice preference, which is a fixed dropdown and cannot list custom voices.
+- Preview uses `Speaker` and `SpeechPlayer`, the same as Read Aloud.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

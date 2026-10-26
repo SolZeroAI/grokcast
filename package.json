@@ -347,6 +347,13 @@
           ]
         }
       ]
+    },
+    {
+      "name": "voices",
+      "title": "Grok Voices",
+      "subtitle": "Grokcast",
+      "description": "Preview Grok's voices, make your own custom voice from a recording or an audio file, and pick the voice Read Aloud uses.",
+      "mode": "view"
     }
   ],
   "preferences": [

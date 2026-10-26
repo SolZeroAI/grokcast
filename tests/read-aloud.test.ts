@@ -6,6 +6,7 @@ import * as Option from "effect/Option"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import { firstText, readAloud } from "../src/lib/read-aloud.ts"
 import { AudioLauncher, PlaybackError, SpeechPlayer } from "../src/lib/speech-player.ts"
+import { GrokVoice, ReadAloudVoice } from "../src/lib/voices.ts"
 import {
   Speaker,
   Speech,
@@ -19,6 +20,7 @@ interface FakeAudio {
   readonly playing: Set<number>
   readonly played: Array<Uint8Array>
   readonly spoken: Array<string>
+  readonly voices: Array<Option.Option<string>>
   nextPid: number
   failPlay: boolean
 }
@@ -27,6 +29,7 @@ const fakeAudio = (): FakeAudio => ({
   playing: new Set(),
   played: [],
   spoken: [],
+  voices: [],
   nextPid: 100,
   failPlay: false,
 })
@@ -59,17 +62,19 @@ const layer = (audio: FakeAudio) =>
     Layer.succeed(
       Speaker,
       Speaker.of({
-        speak: (text) =>
+        speak: (text, settings) =>
           Effect.sync(() => {
             audio.spoken.push(text)
+            audio.voices.push(settings.voice)
             return new Speech({ audio: new Uint8Array([1, 2]), characters: text.length })
           }),
       }),
     ),
     Layer.succeed(
       SpeechPreferences,
-      new SpeechSettings({ voice: Option.none(), speed: Option.none(), language: "auto" }),
+      new SpeechSettings({ voice: Option.some("eve"), speed: Option.none(), language: "auto" }),
     ),
+    ReadAloudVoice.layer,
   ).pipe(Layer.provideMerge(KeyValueStore.layerMemory))
 
 const text = (value: string) => Effect.succeed(Option.some(value))
@@ -140,5 +145,33 @@ describe("readAloud", () => {
       Effect.flip(readAloud(text("Hi."), Effect.void)).pipe(Effect.provide(layer(audio))),
     )
     assert.ok(error instanceof PlaybackError)
+  })
+
+  it("uses the voice picked in Grok Voices instead of the Voice preference", async () => {
+    const audio = fakeAudio()
+    const custom = new GrokVoice({
+      id: "v_123",
+      name: "My Voice",
+      custom: true,
+      gender: Option.none(),
+      language: Option.none(),
+      description: Option.none(),
+      accent: Option.none(),
+      age: Option.none(),
+      useCase: Option.none(),
+      tone: Option.none(),
+      created: Option.none(),
+    })
+    const finishPlaying = Effect.sync(() => audio.playing.clear())
+    await Effect.runPromise(
+      ReadAloudVoice.use((voice) => voice.set(custom)).pipe(
+        Effect.andThen(readAloud(text("One."), Effect.void)),
+        Effect.andThen(finishPlaying),
+        Effect.andThen(ReadAloudVoice.use((voice) => voice.clear)),
+        Effect.andThen(readAloud(text("Two."), Effect.void)),
+        Effect.provide(layer(audio)),
+      ),
+    )
+    assert.deepEqual(audio.voices, [Option.some("v_123"), Option.some("eve")])
   })
 })
