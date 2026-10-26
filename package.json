@@ -61,6 +61,83 @@
   "packageManager": "npm@12.2.0+sha512.66c2632a94e796649738b2d7894d710c2cc2e1696893823066687f6b0d8a52e5f2b54eeaeaa32ffdc513ecca1e49ff794a5c2ec3f9515d879f1b3182b291cf35",
   "commands": [
     {
+      "name": "chat",
+      "title": "Grok Chat",
+      "subtitle": "Grokcast",
+      "description": "Ask Grok anything and keep the conversation going. Grok can search the web and X for current answers. Uses your Grok or X subscription.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "chatModel",
+          "title": "Model",
+          "description": "Leave empty to use xAI's default model, which xAI keeps up to date. Enter a model ID, such as grok-4.7, only to always use that model.",
+          "type": "textfield",
+          "required": false,
+          "placeholder": "xAI default"
+        },
+        {
+          "name": "reasoningEffort",
+          "title": "Reasoning",
+          "description": "How hard Grok thinks before it answers. Lower is faster. Not every model accepts a setting.",
+          "type": "dropdown",
+          "required": false,
+          "default": "default",
+          "data": [
+            {
+              "title": "xAI Default",
+              "value": "default"
+            },
+            {
+              "title": "Low",
+              "value": "low"
+            },
+            {
+              "title": "Medium",
+              "value": "medium"
+            },
+            {
+              "title": "High",
+              "value": "high"
+            }
+          ]
+        },
+        {
+          "name": "webSearch",
+          "title": "Grok Tools",
+          "label": "Search the web",
+          "description": "Let Grok search the web for current information and cite its sources.",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "xSearch",
+          "title": "",
+          "label": "Search X",
+          "description": "Let Grok search posts on X.",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "codeExecution",
+          "title": "",
+          "label": "Run code",
+          "description": "Let Grok write and run Python in xAI's sandbox for calculations and data.",
+          "type": "checkbox",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "chatInstructions",
+          "title": "Instructions",
+          "description": "Sent with every question, such as \"Answer briefly\". Leave empty for none.",
+          "type": "textfield",
+          "required": false
+        }
+      ]
+    },
+    {
       "name": "account",
       "title": "Grok Account",
       "subtitle": "Grokcast",

@@ -11,6 +11,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Dictate (record, then transcribe)                | Done    |
 | Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
+| Grok Chat with web and X search                  | Done    |
 
 ## Microphone
 
@@ -30,6 +31,17 @@ Set these in the extension preferences:
 - **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
+
+## Chat
+
+**Grok Chat** answers questions with Grok and keeps the conversation going. Type a question in the search bar and press Return. The answer streams into the side panel, with its sources, the model that answered, and what Grok's tools did. Ask a follow-up the same way. Press ⌘N for a new conversation and ⌘Y to see your saved conversations. Grokcast keeps the last 50 conversations on this Mac.
+
+Set these in the command preferences:
+
+- **Model**: leave empty to use xAI's default model, which xAI keeps up to date. Enter a model ID only to always use that model.
+- **Reasoning**: how hard Grok thinks before it answers. Lower is faster. Not every model accepts a setting.
+- **Grok Tools**: let Grok search the web, search X, or run Python in xAI's sandbox. Web and X search are on by default.
+- **Instructions**: text sent with every question, such as "Answer briefly".
 
 ## How sign-in works
 

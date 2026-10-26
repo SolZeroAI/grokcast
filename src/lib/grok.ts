@@ -36,6 +36,8 @@ import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./sessio
 import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
 import { Transcriber } from "./transcriber.ts"
 import { XaiClient } from "./xai.ts"
+import { Chat, ChatPreferences, ChatSettings, ChatTool, ReasoningEffort } from "./chat.ts"
+import { ChatConversations } from "./conversations.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `account.tsx`,
@@ -166,6 +168,54 @@ export const RaycastMicrophonePermission = Layer.succeed(
   }),
 )
 
+const ChatPreferenceValues = Schema.Struct({
+  chatModel: Schema.OptionFromOptionalKey(Schema.String),
+  reasoningEffort: Schema.OptionFromOptionalKey(Schema.String),
+  chatInstructions: Schema.OptionFromOptionalKey(Schema.String),
+  webSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  xSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  codeExecution: Schema.OptionFromOptionalKey(Schema.Boolean),
+})
+
+const filled = (text: Option.Option<string>) =>
+  text.pipe(
+    Option.map((value) => value.trim()),
+    Option.filter((value) => value !== ""),
+  )
+
+/** Grok Chat's command preferences. Defaults match `package.json`. */
+export const RaycastChatPreferences = Layer.sync(ChatPreferences, () => {
+  const values = Schema.decodeUnknownOption(ChatPreferenceValues)(getPreferenceValues())
+  const pick = <A>(f: (decoded: typeof ChatPreferenceValues.Type) => Option.Option<A>) =>
+    Option.flatMap(values, f)
+  const on = (tool: ChatTool, enabled: Option.Option<boolean>, fallback: boolean) =>
+    Option.getOrElse(enabled, () => fallback) ? [tool] : []
+  return new ChatSettings({
+    model: filled(pick((decoded) => decoded.chatModel)),
+    reasoningEffort: pick((decoded) => decoded.reasoningEffort).pipe(
+      Option.flatMap(Schema.decodeUnknownOption(ReasoningEffort)),
+    ),
+    instructions: filled(pick((decoded) => decoded.chatInstructions)),
+    tools: [
+      ...on(
+        "webSearch",
+        pick((decoded) => decoded.webSearch),
+        true,
+      ),
+      ...on(
+        "xSearch",
+        pick((decoded) => decoded.xSearch),
+        true,
+      ),
+      ...on(
+        "codeExecution",
+        pick((decoded) => decoded.codeExecution),
+        false,
+      ),
+    ],
+  })
+})
+
 /** `ray build` compiles `recorder/` to this path in the extension's assets. */
 const recorderBinary = () => join(environment.assetsPath, "compiled_raycast_swift", "recorder")
 
@@ -201,10 +251,10 @@ export const RaycastRecorderLauncher = Layer.succeed(
 
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), the microphone, and the dictation preferences and history.
+ * in one request), chat, the microphone, and the preferences and saved history.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer).pipe(
+  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Chat.layer).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
     Layer.provideMerge(GrokSession.layer),
@@ -217,6 +267,8 @@ export const GrokLive = Layer.mergeAll(
   ),
   DictationHistory.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
   RaycastDictationPreferences,
+  ChatConversations.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  RaycastChatPreferences,
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */
