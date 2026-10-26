@@ -12,6 +12,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
 | Grok Models and Count Tokens                     | Done    |
+| Grok Files                                       | Done    |
 
 ## Microphone
 
@@ -37,6 +38,17 @@ Set these in the extension preferences:
 **Grok Models** lists the Grok language, image, and video models that xAI offers your account, newest first. The side panel shows each model's version, aliases, inputs and outputs, context length, and reasoning efforts. Grokcast does not show prices, because your subscription does not pay per token. Other commands do not pin a model, so xAI's default and its upgrades apply on their own.
 
 On a language model, **Count Tokens** (⌘T) shows how that model splits a text into tokens and how many there are.
+
+## Files
+
+**Grok Files** lists the files you keep at xAI, newest first. The side panel shows each file's size, upload date, expiry, purpose, and public link.
+
+- **Upload File** (⌘N) picks a file on this Mac and uploads it. Choose whether xAI deletes it after 1 hour, 1 day, 7 days, or 30 days, or keeps it until you delete it.
+- **Download** saves the file in your Downloads folder. It never replaces a file there: it adds " (1)", " (2)", and so on to the name.
+- **Create Public Link** (⌘L) makes a link anyone can open to download the file, and copies it. Choose how long it works. **Revoke Public Link** stops it.
+- **Delete File** (⌃X) deletes the file at xAI.
+
+The list shows up to the newest 500 files.
 
 ## How sign-in works
 
