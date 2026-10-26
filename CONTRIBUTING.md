@@ -53,6 +53,12 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - xAI drops the connection without a close frame (1006) after the last event. After `audio.done` was sent, any close ends the transcript normally. Before that, a close is a failure.
 - `dictateSpeech` records into the live session and keeps the audio. When the live session fails, gives no text, or does not finish within 10 seconds after recording stops, it sends the whole recording with `Transcriber` instead.
 
+## Models
+
+- `ModelCatalog` in `src/lib/models.ts` lists `xai.models.language`, `xai.models.image`, and `xai.models.video` at the same time. Only the general `xai.models.list()` gives context lengths, so it runs too, and its failure only leaves context lengths out.
+- Prices are left out of `GrokModel`: a subscription does not pay per token.
+- `ModelCatalog.tokenize` calls `xai.tokenizer.encode`. It needs a model, so Count Tokens is an action on a language model in Grok Models, not a command of its own.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

@@ -11,6 +11,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Dictate (record, then transcribe)                | Done    |
 | Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
+| Grok Models and Count Tokens                     | Done    |
 
 ## Microphone
 
@@ -30,6 +31,12 @@ Set these in the extension preferences:
 - **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
+
+## Models
+
+**Grok Models** lists the Grok language, image, and video models that xAI offers your account, newest first. The side panel shows each model's version, aliases, inputs and outputs, context length, and reasoning efforts. Grokcast does not show prices, because your subscription does not pay per token. Other commands do not pin a model, so xAI's default and its upgrades apply on their own.
+
+On a language model, **Count Tokens** (⌘T) shows how that model splits a text into tokens and how many there are.
 
 ## How sign-in works
 

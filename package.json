@@ -80,6 +80,13 @@
       "subtitle": "Grokcast",
       "description": "Search, paste, or copy your past dictations.",
       "mode": "view"
+    },
+    {
+      "name": "models",
+      "title": "Grok Models",
+      "subtitle": "Grokcast",
+      "description": "Browse the Grok language, image, and video models your subscription can use, and count the tokens in a text.",
+      "mode": "view"
     }
   ],
   "preferences": [
