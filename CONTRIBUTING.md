@@ -53,6 +53,18 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - xAI drops the connection without a close frame (1006) after the last event. After `audio.done` was sent, any close ends the transcript normally. Before that, a close is a failure.
 - `dictateSpeech` records into the live session and keeps the audio. When the live session fails, gives no text, or does not finish within 10 seconds after recording stops, it sends the whole recording with `Transcriber` instead.
 
+## Voice conversation
+
+The xAI SDK covers only the realtime endpoint's client secrets (`xai.voice.clientSecrets`), so `Conversation` in `src/lib/conversation.ts` talks to `wss://api.x.ai/v1/realtime` with Effect's `Socket`, like `LiveTranscriber`. The protocol below comes from third-party integrations (Mastra, Pydantic AI, fal) and the SDK's types, because docs.x.ai was out of reach when it was written. It is not yet tested against xAI. Check each point on a Mac, and fix this list when xAI differs.
+
+- The URL has no `model`, so xAI's default voice model applies. The `authorization: Bearer` header carries the OAuth token, as for live speech-to-text. If xAI refuses the bearer here, the fallback is an ephemeral secret from `xai.voice.clientSecrets.create()`, sent as the WebSocket subprotocol `xai-client-secret.<secret>`.
+- The first message is `session.update`: `turn_detection: { type: "server_vad" }`, 16 kHz PCM in (`audio.input.format`), and 24 kHz PCM out (`audio.output.format`). `voice` and `instructions` sit at the top of `session`, and are left out when the user did not set them.
+- Microphone audio goes out as `input_audio_buffer.append` text frames with base64 PCM, in 100 ms frames (`toFrames`).
+- Server events: `response.output_audio.delta` (or `response.audio.delta`) carries base64 PCM in `delta`. `response.output_audio_transcript.delta` (or `response.audio_transcript.delta`, or a text delta) carries Grok's words. `conversation.item.input_audio_transcription.completed` (or `.updated`) carries the user's whole turn in `transcript`; xAI can correct earlier words, so it replaces the turn with the same `item_id`. `input_audio_buffer.speech_started` holds the user's turn in place before Grok's reply. `response.done` ends a reply. Unknown events are skipped. An `error` event shows as a note and does not end the conversation.
+- Grok's reply plays in pieces of at least 2 seconds (`SEGMENT_SECONDS`), each written as a WAV file and played by `AudioPlayer`. `RaycastAudioPlayer` writes `talk-reply.wav` in the support folder and runs `/usr/bin/afplay` as a child of the command, stopped with SIGTERM. It gets no stdin, because Tinycast gives children no pipe.
+- The conversation is half-duplex: from the first sign of a reply until the last piece has played, microphone audio is dropped, so Grok does not hear itself. So the user cannot cut in by speaking. Interrupt (⌘.) drops what has not played, stops the player, and sends `response.cancel`.
+- A conversation ends after `MAX_CONVERSATION`, which is the recorder's own 10-minute limit. A closed connection before the user ends it is a failure.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

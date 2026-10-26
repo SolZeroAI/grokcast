@@ -80,6 +80,63 @@
       "subtitle": "Grokcast",
       "description": "Search, paste, or copy your past dictations.",
       "mode": "view"
+    },
+    {
+      "name": "talk",
+      "title": "Talk to Grok",
+      "subtitle": "Grokcast",
+      "description": "Have a spoken conversation with Grok. Speak, pause, and Grok answers out loud. Uses your Grok or X subscription.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "talkVoice",
+          "title": "Voice",
+          "description": "The voice Grok answers in. xAI Default follows xAI's choice.",
+          "type": "dropdown",
+          "required": false,
+          "default": "default",
+          "data": [
+            {
+              "title": "xAI Default",
+              "value": "default"
+            },
+            {
+              "title": "Eve",
+              "value": "eve"
+            },
+            {
+              "title": "Ara",
+              "value": "ara"
+            },
+            {
+              "title": "Rex",
+              "value": "rex"
+            },
+            {
+              "title": "Sal",
+              "value": "sal"
+            },
+            {
+              "title": "Leo",
+              "value": "leo"
+            }
+          ]
+        },
+        {
+          "name": "talkVoiceId",
+          "title": "Custom Voice ID",
+          "description": "The ID of one of your custom voices, or of another built-in voice. It replaces the voice above. Leave empty to use the voice above.",
+          "type": "textfield",
+          "required": false
+        },
+        {
+          "name": "talkInstructions",
+          "title": "Instructions",
+          "description": "Tell Grok how to behave in the conversation, such as \"Answer in one or two sentences.\" Leave empty for xAI's default.",
+          "type": "textfield",
+          "required": false
+        }
+      ]
     }
   ],
   "preferences": [

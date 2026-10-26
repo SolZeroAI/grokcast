@@ -4,13 +4,14 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 
 ## Status
 
-| Feature                                          | State   |
-| ------------------------------------------------ | ------- |
-| Sign in and sign out with your Grok subscription | Done    |
-| Microphone recorder                              | Done    |
-| Dictate (record, then transcribe)                | Done    |
-| Live dictation with partial text                 | Done    |
-| Read selected text aloud                         | Planned |
+| Feature                                          | State                         |
+| ------------------------------------------------ | ----------------------------- |
+| Sign in and sign out with your Grok subscription | Done                          |
+| Microphone recorder                              | Done                          |
+| Dictate (record, then transcribe)                | Done                          |
+| Live dictation with partial text                 | Done                          |
+| Read selected text aloud                         | Planned                       |
+| Talk to Grok (spoken conversation)               | Built, not yet tried on a Mac |
 
 ## Microphone
 
@@ -30,6 +31,20 @@ Set these in the extension preferences:
 - **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
+
+## Talk to Grok
+
+**Talk to Grok** is a spoken conversation. Speak, then pause: Grok answers out loud, and the words of both sides show as you go. Press ⌘. to stop Grok mid-answer, and Return or Esc to end the conversation. Copy Transcript puts the whole conversation on the clipboard. A conversation ends on its own after 10 minutes. Audio is not saved.
+
+While Grok speaks, the microphone is not sent, so Grok does not hear itself through your speakers. To cut in, press ⌘. first.
+
+Set these in the command's preferences:
+
+- **Voice**: xAI Default, or one of Eve, Ara, Rex, Sal, and Leo.
+- **Custom Voice ID**: the ID of one of your custom voices, or another built-in voice. It replaces the voice above.
+- **Instructions**: tell Grok how to behave, such as "Answer in one or two sentences."
+
+The conversation uses xAI's realtime voice endpoint, with your subscription. Grokcast does not pick a voice model, so xAI's default and its upgrades apply.
 
 ## How sign-in works
 

@@ -1,9 +1,11 @@
 // Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID and
-// dictation settings from preferences, the dictation history in LocalStorage, and
-// the Swift microphone helper from the extension's assets.
+// dictation and Talk to Grok settings from preferences, the dictation history in
+// LocalStorage, the Swift microphone helper from the extension's assets, and macOS
+// `afplay` for Grok's spoken replies.
 
 import { spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
+import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
@@ -15,6 +17,13 @@ import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as FetchHttpClient from "effect/http/FetchHttpClient"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
+import {
+  AudioPlayer,
+  Conversation,
+  PlaybackError,
+  TalkPreferences,
+  TalkSettings,
+} from "./conversation.ts"
 import {
   AfterDictation,
   DictationPreferences,
@@ -92,6 +101,9 @@ const Preferences = Schema.Struct({
   formatNumbers: Schema.OptionFromOptionalKey(Schema.Boolean),
   afterDictation: Schema.OptionFromOptionalKey(AfterDictation),
   keepHistory: Schema.OptionFromOptionalKey(Schema.Boolean),
+  talkVoice: Schema.OptionFromOptionalKey(Schema.String),
+  talkVoiceId: Schema.OptionFromOptionalKey(Schema.String),
+  talkInstructions: Schema.OptionFromOptionalKey(Schema.String),
 })
 
 const preferences = () => Schema.decodeUnknownOption(Preferences)(getPreferenceValues())
@@ -118,6 +130,31 @@ export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () =
     formatNumbers: value((decoded) => decoded.formatNumbers, true),
     afterDictation: value((decoded) => decoded.afterDictation, "paste"),
     keepHistory: value((decoded) => decoded.keepHistory, true),
+  })
+})
+
+/** A preference with text in it. An empty one leaves the choice to xAI. */
+const filled = (value: Option.Option<string>) =>
+  Option.filter(
+    Option.map(value, (text) => text.trim()),
+    (text) => text !== "",
+  )
+
+/** Talk to Grok's preferences. A custom voice ID wins over the voice picked from the list. */
+export const RaycastTalkPreferences = Layer.sync(TalkPreferences, () => {
+  const values = preferences()
+  const pick = (field: (decoded: typeof Preferences.Type) => Option.Option<string>) =>
+    filled(Option.flatMap(values, field))
+  return new TalkSettings({
+    voice: Option.orElse(
+      pick((decoded) => decoded.talkVoiceId),
+      () =>
+        Option.filter(
+          pick((decoded) => decoded.talkVoice),
+          (voice) => voice !== "default",
+        ),
+    ),
+    instructions: pick((decoded) => decoded.talkInstructions),
   })
 })
 
@@ -199,11 +236,44 @@ export const RaycastRecorderLauncher = Layer.succeed(
   }),
 )
 
+const AFPLAY = "/usr/bin/afplay"
+
+/** Each piece of Grok's reply is written here, then played. The next piece replaces it. */
+const replyFile = () => join(environment.supportPath, "talk-reply.wav")
+
 /**
- * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), the microphone, and the dictation preferences and history.
+ * Plays Grok's reply with macOS `afplay`, as a child of the command, so it stops
+ * when the conversation does. Untested in Tinycast so far.
  */
-export const GrokLive = Layer.mergeAll(
+export const RaycastAudioPlayer = Layer.succeed(
+  AudioPlayer,
+  AudioPlayer.of({
+    play: Effect.fn("RaycastAudioPlayer.play")(function* (wav: Uint8Array<ArrayBuffer>) {
+      const file = replyFile()
+      yield* Effect.tryPromise({
+        try: async () => {
+          await mkdir(environment.supportPath, { recursive: true })
+          await writeFile(file, wav)
+        },
+        catch: () => new PlaybackError({ message: "Could not save Grok's reply to play it." }),
+      })
+      yield* Effect.callback<void, PlaybackError>((resume) => {
+        // No stdin: Tinycast does not give children a pipe.
+        const child = spawn(AFPLAY, [file], { stdio: "ignore" })
+        child.on("error", () =>
+          resume(Effect.fail(new PlaybackError({ message: "Could not play Grok's reply." }))),
+        )
+        child.on("exit", () => resume(Effect.void))
+        return Effect.sync(() => {
+          child.kill("SIGTERM")
+        })
+      })
+    }),
+  }),
+)
+
+/** Every service but `Conversation`, which needs several of them. */
+const GrokServices = Layer.mergeAll(
   Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
@@ -217,6 +287,17 @@ export const GrokLive = Layer.mergeAll(
   ),
   DictationHistory.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
   RaycastDictationPreferences,
+  RaycastTalkPreferences,
+)
+
+/**
+ * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
+ * in one request), spoken conversations, the microphone, and the dictation and
+ * Talk to Grok preferences and the dictation history.
+ */
+export const GrokLive = Conversation.layer.pipe(
+  Layer.provideMerge(RaycastAudioPlayer),
+  Layer.provideMerge(GrokServices),
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */
