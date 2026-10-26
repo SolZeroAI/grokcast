@@ -81,7 +81,7 @@ const toTranscriptionError = (error: XaiSdkError): TranscriptionError =>
     onNone: () =>
       Match.value(error.cause).pipe(
         Match.when(Match.instanceOf(AuthenticationError), () =>
-          failed("signIn", "xAI did not accept your sign-in. Run Sign in to Grok again."),
+          failed("signIn", "xAI did not accept your sign-in. Sign in again from Grok Account."),
         ),
         Match.when(Match.instanceOf(PermissionDeniedError), () =>
           failed(
