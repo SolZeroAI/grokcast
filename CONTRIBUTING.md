@@ -53,6 +53,16 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - xAI drops the connection without a close frame (1006) after the last event. After `audio.done` was sent, any close ends the transcript normally. Before that, a close is a failure.
 - `dictateSpeech` records into the live session and keeps the audio. When the live session fails, gives no text, or does not finish within 10 seconds after recording stops, it sends the whole recording with `Transcriber` instead.
 
+## Video generation
+
+`VideoGenerator` in `src/lib/video.ts` uses the SDK's `videos.generate`, `videos.edit`, `videos.extend`, and `videos.get`:
+
+- Never set `model`. SDK 0.2.4's types require it, but the API uses xAI's default without it, so `withXaiDefaultModel` leaves it out (the one type assertion, with a SAFETY comment).
+- Pictures and MP4s go as `Blob`s; the SDK sends them inline as data URLs.
+- A job starts with a `request_id`. `follow` polls `videos.get` every 5 seconds with an Effect `Schedule` instead of the SDK's `wait`, so it reports xAI's `progress` and runs on `TestClock` in tests. After 10 minutes it fails with the request ID, and the UI offers **Check Again**.
+- `pending` (also a 202 with no body) keeps polling. `done` without a URL, or with `respect_moderation: false`, means moderation blocked the video. `failed` passes on xAI's message. `expired` means the result is gone.
+- The video URL is public and temporary. `download` fetches it with the Effect `HttpClient`, without the Grok token.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

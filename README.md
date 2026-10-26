@@ -11,6 +11,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Dictate (record, then transcribe)                | Done    |
 | Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
+| Generate, edit, and extend videos                | Built   |
 
 ## Microphone
 
@@ -30,6 +31,14 @@ Set these in the extension preferences:
 - **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
+
+## Video
+
+**Generate Video** makes a short video with Grok Imagine, with your subscription. Write a prompt, or choose a picture to use as the first frame. You can also edit an MP4 (say what to change) or extend one (say what happens next).
+
+Length, aspect ratio, and resolution start at **xAI Default**. Grokcast never picks the model, so xAI's current video model and its upgrades apply. A video usually takes a minute or two. Keep the command open while it works: the side panel shows xAI's progress. If it takes more than 10 minutes, **Check Again** looks up the same job instead of starting a new one.
+
+When the video is ready, **Open Video** plays it in your browser, and ⌘S saves the MP4 to your Downloads folder. xAI's link is temporary, so save the videos you want to keep.
 
 ## How sign-in works
 
