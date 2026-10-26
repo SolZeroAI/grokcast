@@ -1,5 +1,8 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { describe, it, type TestContext } from "node:test"
 import * as Arr from "effect/Array"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
@@ -18,6 +21,7 @@ import {
   turnMarkdown,
   type ChatProgress,
 } from "../src/lib/chat.ts"
+import { ChatImages, imageMarkdown, isSupportedImage } from "../src/lib/images.ts"
 import { StoredTokens } from "../src/lib/session.ts"
 import {
   fakeFetch,
@@ -57,6 +61,7 @@ const turn = (prompt: string, answer: string) =>
     citations: [],
     toolsUsed: [],
     complete: true,
+    images: Option.none(),
   })
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
@@ -142,7 +147,12 @@ const provide = <A, E>(program: Effect.Effect<A, E, Chat>, fetch: FakeFetch, sto
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(program),
-      Effect.provide(Chat.layer.pipe(Layer.provideMerge(testLayer(fetch, store)))),
+      Effect.provide(
+        Chat.layer.pipe(
+          Layer.provideMerge(ChatImages.layer),
+          Layer.provideMerge(testLayer(fetch, store)),
+        ),
+      ),
     ),
   )
 
@@ -153,13 +163,14 @@ const ask = (
     readonly settings?: ChatSettings
     readonly history?: ReadonlyArray<ChatTurn>
     readonly progress?: Progress
+    readonly images?: ReadonlyArray<string>
   } = {},
 ) =>
   provide(
     Chat.use((chat) =>
       chat.ask(
         "Say hello",
-        { conversationId: "c1", history: options.history ?? [] },
+        { conversationId: "c1", history: options.history ?? [], images: options.images ?? [] },
         options.settings ?? defaults,
         options.progress ?? progress(),
       ),
@@ -172,7 +183,12 @@ const askError = (fetch: FakeFetch, store: MemoryStore = signedIn()) =>
   provide(
     Effect.flip(
       Chat.use((chat) =>
-        chat.ask("Say hello", { conversationId: "c1", history: [] }, defaults, progress()),
+        chat.ask(
+          "Say hello",
+          { conversationId: "c1", history: [], images: [] },
+          defaults,
+          progress(),
+        ),
       ),
     ),
     fetch,
@@ -188,7 +204,21 @@ const Body = Schema.fromJsonString(
     instructions: Schema.optionalKey(Schema.String),
     reasoning: Schema.optionalKey(Schema.Struct({ effort: Schema.String })),
     tools: Schema.optionalKey(Schema.Array(Schema.Struct({ type: Schema.String }))),
-    input: Schema.Array(Schema.Struct({ role: Schema.String, content: Schema.String })),
+    input: Schema.Array(
+      Schema.Struct({
+        role: Schema.String,
+        content: Schema.Union([
+          Schema.String,
+          Schema.Array(
+            Schema.Struct({
+              type: Schema.String,
+              text: Schema.optionalKey(Schema.String),
+              image_url: Schema.optionalKey(Schema.String),
+            }),
+          ),
+        ]),
+      }),
+    ),
   }),
 )
 
@@ -300,6 +330,84 @@ describe("Chat.ask", () => {
   })
 })
 
+/** A tiny PNG file in a new temporary folder. */
+const pngFile = async (t: TestContext, name = "chart.png") => {
+  const folder = await mkdtemp(join(tmpdir(), "grokcast-"))
+  t.after(() => rm(folder, { recursive: true, force: true }))
+  const path = join(folder, name)
+  await writeFile(path, PNG)
+  return path
+}
+
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+
+describe("Chat.ask with images", () => {
+  it("sends attached images with the question and keeps their paths on the turn", async (t) => {
+    const image = await pngFile(t)
+    const fetch = fakeFetch(answerStream)
+    const answered = await ask(fetch, { images: [image] })
+    assert.deepEqual(answered.images, Option.some([image]))
+    const [question] = bodyOf(fetch).input
+    assert.equal(question?.role, "user")
+    assert.deepEqual(question?.content, [
+      { type: "input_text", text: "Say hello" },
+      {
+        type: "input_image",
+        image_url: `data:image/png;base64,${Buffer.from(PNG).toString("base64")}`,
+      },
+    ])
+  })
+
+  it("resends an earlier turn's image, and leaves it out when the file is gone", async (t) => {
+    const image = await pngFile(t)
+    const earlier = (path: string) =>
+      new ChatTurn({ ...turn("Hi", "A chart."), images: Option.some([path]) })
+    const kept = fakeFetch(answerStream)
+    await ask(kept, { history: [earlier(image)] })
+    assert.ok(Array.isArray(bodyOf(kept).input[0]?.content))
+    const gone = fakeFetch(answerStream)
+    await ask(gone, { history: [earlier(join(tmpdir(), "grokcast-missing.png"))] })
+    assert.equal(bodyOf(gone).input[0]?.content, "Hi")
+  })
+
+  it("fails without calling xAI when an attached image cannot be read", async (t) => {
+    const fetch = fakeFetch(answerStream)
+    const error = await provide(
+      Effect.flip(
+        Chat.use((chat) =>
+          chat.ask(
+            "What is this?",
+            { conversationId: "c1", history: [], images: [join(tmpdir(), "grokcast-missing.png")] },
+            defaults,
+            progress(),
+          ),
+        ),
+      ),
+      fetch,
+      signedIn(),
+    )
+    assert.equal(error.reason, "failed")
+    assert.match(error.message, /Could not read grokcast-missing\.png/)
+    assert.equal(fetch.requests.length, 0)
+    const gif = await pngFile(t, "animation.gif")
+    const unsupported = await provide(
+      Effect.flip(
+        Chat.use((chat) =>
+          chat.ask(
+            "What is this?",
+            { conversationId: "c1", history: [], images: [gif] },
+            defaults,
+            progress(),
+          ),
+        ),
+      ),
+      fetch,
+      signedIn(),
+    )
+    assert.match(unsupported.message, /not a JPEG, PNG, or WebP image/)
+  })
+})
+
 describe("chat helpers", () => {
   it("builds the input from earlier turns", () => {
     assert.deepEqual(inputOf([], "Hi"), [{ role: "user", content: "Hi" }])
@@ -310,6 +418,15 @@ describe("chat helpers", () => {
     assert.equal(
       titleOf("one two three four five six seven eight nine ten eleven twelve thirteen"),
       "one two three four five six seven eight nine ten eleven…",
+    )
+  })
+
+  it("only attaches image formats Grok reads, and shows them small", () => {
+    assert.equal(isSupportedImage("/a/b.PNG"), true)
+    assert.equal(isSupportedImage("/a/b.heic"), false)
+    assert.equal(
+      imageMarkdown("/tmp/My [chart].png"),
+      "![My (chart).png](file:///tmp/My%20%5Bchart%5D.png?raycast-height=160)",
     )
   })
 

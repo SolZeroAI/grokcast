@@ -38,6 +38,7 @@ import { Transcriber } from "./transcriber.ts"
 import { XaiClient } from "./xai.ts"
 import { Chat, ChatPreferences, ChatSettings, ChatTool, ReasoningEffort } from "./chat.ts"
 import { ChatConversations } from "./conversations.ts"
+import { ChatImages } from "./images.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `account.tsx`,
@@ -257,6 +258,7 @@ export const GrokLive = Layer.mergeAll(
   Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Chat.layer).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
+    Layer.provideMerge(ChatImages.layer),
     Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(XaiEndpoints.layer),
     Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),

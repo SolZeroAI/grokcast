@@ -2,7 +2,10 @@ import {
   Action,
   ActionPanel,
   Alert,
+  Clipboard,
   confirmAlert,
+  Form,
+  getSelectedFinderItems,
   Icon,
   Keyboard,
   launchCommand,
@@ -10,6 +13,7 @@ import {
   List,
   showToast,
   Toast,
+  useNavigation,
 } from "@raycast/api"
 import * as Arr from "effect/Array"
 import * as Effect from "effect/Effect"
@@ -24,6 +28,7 @@ import {
   type Conversation,
 } from "./lib/conversations.ts"
 import { GrokRuntime } from "./lib/grok.ts"
+import { imageMarkdown, isSupportedImage } from "./lib/images.ts"
 
 export default function GrokChat() {
   return <ChatView initial={Option.none()} nested={false} />
@@ -32,6 +37,7 @@ export default function GrokChat() {
 /** The question being answered, and what Grok has sent so far. */
 interface Pending {
   readonly prompt: string
+  readonly images: ReadonlyArray<string>
   readonly status: string
   readonly answer: string
 }
@@ -39,6 +45,7 @@ interface Pending {
 /** A question that got no answer. */
 interface Failure {
   readonly prompt: string
+  readonly images: ReadonlyArray<string>
   readonly message: string
   readonly signIn: boolean
 }
@@ -57,6 +64,12 @@ const signIn = () =>
 const failureToast = (title: string) =>
   Effect.tryPromise(() => showToast({ style: Toast.Style.Failure, title })).pipe(Effect.ignore)
 
+/** The question, with its images, as the detail pane shows it. */
+const questionMarkdown = (prompt: string, images: ReadonlyArray<string>) =>
+  [`**${prompt}**`, ...images.map(imageMarkdown)].join("\n\n")
+
+const imageCount = (count: number) => `${count} ${count === 1 ? "image" : "images"}`
+
 function ChatView({
   initial,
   nested,
@@ -70,6 +83,7 @@ function ChatView({
   const [failure, setFailure] = useState<Option.Option<Failure>>(Option.none())
   const [searchText, setSearchText] = useState("")
   const [selected, setSelected] = useState<Option.Option<string>>(Option.none())
+  const [attachments, setAttachments] = useState<ReadonlyArray<string>>([])
   const fiber = useRef<Option.Option<Fiber.Fiber<void>>>(Option.none())
 
   // Stop an answer in progress when the command closes.
@@ -85,15 +99,51 @@ function ChatView({
     onSome: (current) => current.turns,
   })
 
-  const ask = (text: string) => {
+  /** Attach the images among `paths`. Other files are skipped with a toast. */
+  const attach = (paths: ReadonlyArray<string>, source: string) => {
+    const images = paths.filter(isSupportedImage)
+    if (images.length === 0) {
+      void showToast({
+        style: Toast.Style.Failure,
+        title: `No JPEG, PNG, or WebP image ${source}`,
+      })
+      return
+    }
+    setAttachments((current) => Arr.dedupe([...current, ...images]))
+    setSelected(Option.some("attachments"))
+    if (images.length < paths.length) {
+      void showToast({
+        style: Toast.Style.Failure,
+        title: `Skipped ${paths.length - images.length} files that are not images Grok can read`,
+      })
+    }
+  }
+
+  const attachFinderSelection = async () => {
+    const items = await getSelectedFinderItems().catch(() => [])
+    attach(
+      items.map((item) => item.path),
+      "is selected in Finder",
+    )
+  }
+
+  const attachClipboardImage = async () => {
+    const content = await Clipboard.read().catch(() => ({ text: "", file: undefined }))
+    attach(Option.toArray(Option.fromNullishOr(content.file)), "is on the clipboard")
+  }
+
+  const ask = (text: string, images: ReadonlyArray<string> = attachments) => {
     const prompt = text.trim()
     if (prompt === "" || Option.isSome(pending)) return
     setSearchText("")
+    setAttachments([])
     setFailure(Option.none())
     setSelected(Option.some("pending"))
     const view = { prompt, status: "Waiting for Grok", answer: "", timer: false, done: false }
     const show = () => {
-      if (!view.done) setPending(Option.some({ prompt, status: view.status, answer: view.answer }))
+      if (!view.done) {
+        setPending(Option.some({ prompt, images, status: view.status, answer: view.answer }))
+      }
     }
     // Draw the newest text a moment later, once, however many pieces arrive meanwhile.
     const showSoon = () => {
@@ -115,7 +165,7 @@ function ChatView({
       })
       const turn = yield* chat.ask(
         prompt,
-        { conversationId: base.id, history: base.turns },
+        { conversationId: base.id, history: base.turns, images },
         settings,
         {
           thinking: () => {
@@ -144,13 +194,23 @@ function ChatView({
       Effect.catchTag("ChatError", (error) =>
         Effect.sync(() => {
           setFailure(
-            Option.some({ prompt, message: error.message, signIn: error.reason === "signIn" }),
+            Option.some({
+              prompt,
+              images,
+              message: error.message,
+              signIn: error.reason === "signIn",
+            }),
           )
           setSelected(Option.some("failure"))
         }),
       ),
       // Stopped by the user: give the question back to edit or send again.
-      Effect.onInterrupt(() => Effect.sync(() => setSearchText(prompt))),
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          setSearchText(prompt)
+          setAttachments(images)
+        }),
+      ),
       Effect.ensuring(
         Effect.sync(() => {
           view.done = true
@@ -168,6 +228,7 @@ function ChatView({
 
   const startNew = () => {
     stop()
+    setAttachments([])
     setConversation(Option.none())
     setFailure(Option.none())
     setSelected(Option.none())
@@ -198,6 +259,34 @@ function ChatView({
 
   const commonActions = (
     <>
+      <ActionPanel.Section title="Images">
+        <Action
+          title="Attach Finder Selection"
+          icon={Icon.Finder}
+          shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+          onAction={attachFinderSelection}
+        />
+        <Action
+          title="Attach Clipboard Image"
+          icon={Icon.Clipboard}
+          shortcut={{ modifiers: ["cmd", "shift"], key: "v" }}
+          onAction={attachClipboardImage}
+        />
+        <Action.Push
+          title="Choose Images…"
+          icon={Icon.Image}
+          shortcut={{ modifiers: ["cmd", "shift"], key: "i" }}
+          target={<ChooseImages onChoose={(paths) => attach(paths, "was chosen")} />}
+        />
+        {attachments.length > 0 ? (
+          <Action
+            title="Remove Attached Images"
+            icon={Icon.XMarkCircle}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "backspace" }}
+            onAction={() => setAttachments([])}
+          />
+        ) : null}
+      </ActionPanel.Section>
       <ActionPanel.Section>
         <Action
           title="New Conversation"
@@ -231,11 +320,19 @@ function ChatView({
   return (
     <List
       isLoading={asking}
-      isShowingDetail={turns.length > 0 || asking || Option.isSome(failure)}
+      isShowingDetail={
+        turns.length > 0 || asking || Option.isSome(failure) || attachments.length > 0
+      }
       filtering={false}
       searchText={searchText}
       onSearchTextChange={setSearchText}
-      searchBarPlaceholder={turns.length > 0 ? "Ask a follow-up…" : "Ask Grok…"}
+      searchBarPlaceholder={
+        attachments.length > 0
+          ? `Ask about ${attachments.length === 1 ? "the image" : `the ${attachments.length} images`}…`
+          : turns.length > 0
+            ? "Ask a follow-up…"
+            : "Ask Grok…"
+      }
       navigationTitle={Option.match(conversation, {
         onNone: () => "Grok Chat",
         onSome: (current) => current.title,
@@ -246,7 +343,7 @@ function ChatView({
       <List.EmptyView
         icon={Icon.SpeechBubble}
         title="Ask Grok anything"
-        description="Type a question and press Return. Grok can search the web and X, and you can turn its tools on or off in the command preferences."
+        description="Type a question and press Return. Grok can search the web and X, and look at images you attach from Finder or the clipboard."
         actions={
           <ActionPanel>
             {askAction}
@@ -254,6 +351,27 @@ function ChatView({
           </ActionPanel>
         }
       />
+      {attachments.length > 0 && !asking ? (
+        <List.Item
+          id="attachments"
+          title={`${imageCount(attachments.length)} attached`}
+          icon={Icon.Image}
+          detail={
+            <List.Item.Detail
+              markdown={[
+                "_Type a question about the images and press Return._",
+                ...attachments.map(imageMarkdown),
+              ].join("\n\n")}
+            />
+          }
+          actions={
+            <ActionPanel>
+              {askAction}
+              {commonActions}
+            </ActionPanel>
+          }
+        />
+      ) : null}
       {Option.match(pending, {
         onNone: () => null,
         onSome: (current) => (
@@ -263,7 +381,7 @@ function ChatView({
             icon={Icon.Hourglass}
             detail={
               <List.Item.Detail
-                markdown={`**${current.prompt}**\n\n${
+                markdown={`${questionMarkdown(current.prompt, current.images)}\n\n${
                   current.answer === "" ? `_${current.status}…_` : current.answer
                 }`}
               />
@@ -288,7 +406,11 @@ function ChatView({
             id="failure"
             title={current.prompt}
             icon={Icon.ExclamationMark}
-            detail={<List.Item.Detail markdown={`**${current.prompt}**\n\n${current.message}`} />}
+            detail={
+              <List.Item.Detail
+                markdown={`${questionMarkdown(current.prompt, current.images)}\n\n${current.message}`}
+              />
+            }
             actions={
               <ActionPanel>
                 {askAction}
@@ -299,7 +421,7 @@ function ChatView({
                   title="Try Again"
                   icon={Icon.ArrowClockwise}
                   shortcut={Keyboard.Shortcut.Common.Refresh}
-                  onAction={() => ask(current.prompt)}
+                  onAction={() => ask(current.prompt, current.images)}
                 />
                 {commonActions}
               </ActionPanel>
@@ -348,6 +470,36 @@ function ChatView({
         />
       ))}
     </List>
+  )
+}
+
+/** A file picker for images, from Finder. It hands the chosen paths back and closes. */
+function ChooseImages({ onChoose }: { readonly onChoose: (paths: ReadonlyArray<string>) => void }) {
+  const { pop } = useNavigation()
+  return (
+    <Form
+      navigationTitle="Attach Images"
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Attach Images"
+            icon={Icon.Image}
+            onSubmit={(values: { readonly images: ReadonlyArray<string> }) => {
+              onChoose(values.images)
+              pop()
+            }}
+          />
+        </ActionPanel>
+      }
+    >
+      <Form.FilePicker
+        id="images"
+        title="Images"
+        info="JPEG, PNG, or WebP, up to 20 MB each."
+        allowMultipleSelection
+        canChooseDirectories={false}
+      />
+    </Form>
   )
 }
 

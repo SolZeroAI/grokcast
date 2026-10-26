@@ -12,6 +12,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Live dictation with partial text                 | Done    |
 | Read selected text aloud                         | Planned |
 | Grok Chat with web and X search                  | Done    |
+| Ask Grok about images in a chat                  | Done    |
 
 ## Microphone
 
@@ -35,6 +36,8 @@ Set these in the extension preferences:
 ## Chat
 
 **Grok Chat** answers questions with Grok and keeps the conversation going. Type a question in the search bar and press Return. The answer streams into the side panel, with its sources, the model that answered, and what Grok's tools did. Ask a follow-up the same way. Press ⌘N for a new conversation and ⌘Y to see your saved conversations. Grokcast keeps the last 50 conversations on this Mac.
+
+To ask about an image, attach it first: select it in Finder and press ⌘⇧F, copy it and press ⌘⇧V, or press ⌘⇧I to choose files. Grok reads JPEG, PNG, and WebP images up to 20 MB. A conversation keeps the image's location, not a copy, so follow-ups send the image again while the file is still there.
 
 Set these in the command preferences:
 

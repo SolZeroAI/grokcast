@@ -38,6 +38,7 @@ const turnAt = (createdAt: number, prompt: string) =>
     citations: [],
     toolsUsed: [],
     complete: true,
+    images: Option.none(),
   })
 
 const titles = ChatConversations.use((saved) => saved.list).pipe(

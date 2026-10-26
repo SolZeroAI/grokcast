@@ -1,6 +1,6 @@
 // Chat with Grok as the signed-in user: stream an answer with the xAI Responses API,
 // with Grok's own web search, X search, and code execution when the user turns them
-// on. No Raycast imports, so tests run it under plain Node with a fake `fetch`.
+// on, and with images the user attaches. No Raycast imports, so tests run it under plain Node with a fake `fetch`.
 
 import type { CreateParams, InputItem, ServerToolCall, Tool } from "@xai-official/sdk"
 import { codeExecution, webSearch, xSearch } from "@xai-official/sdk/tools"
@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
+import { ChatImages, imageMarkdown } from "./images.ts"
 import { callXai, describeXaiError, XaiClient, XaiFailureReason } from "./xai.ts"
 
 /** How long Grok may go without sending anything while it answers. Reasoning can be quiet for a while. */
@@ -62,7 +63,13 @@ export class ChatTurn extends Schema.Class<ChatTurn>("ChatTurn")({
   toolsUsed: Schema.Array(Schema.String),
   /** False when the answer stopped early, such as at the output limit. */
   complete: Schema.Boolean,
+  /** Paths of the images attached to the question. Added with image understanding. */
+  images: Schema.OptionFromOptionalKey(Schema.Array(Schema.String)),
 }) {}
+
+/** The images attached to `turn`'s question. */
+export const imagesOf = (turn: ChatTurn): ReadonlyArray<string> =>
+  Option.getOrElse(turn.images, (): ReadonlyArray<string> => [])
 
 /** Chat failed. `reason` picks what the UI offers, `message` is for the user. */
 export class ChatError extends Schema.TaggedError<ChatError>()("ChatError", {
@@ -86,22 +93,49 @@ export interface AskContext {
   readonly conversationId: string
   /** The earlier turns, oldest first. */
   readonly history: ReadonlyArray<ChatTurn>
+  /** Paths of images to send with the question. */
+  readonly images: ReadonlyArray<string>
 }
 
+/** Images read for a request, by path. A missing path was not readable and is left out. */
+export type LoadedImages = ReadonlyMap<string, Blob>
+
 /**
- * The input for a new question: earlier turns as plain user and assistant messages,
- * then the question. Only the visible text is kept between turns, so a saved
- * conversation continues the same way it began.
+ * The input for a new question: earlier turns as user and assistant messages, then
+ * the question. Only the visible text and the attached images are kept between turns,
+ * so a saved conversation continues the same way it began.
  */
-export const inputOf = (history: ReadonlyArray<ChatTurn>, prompt: string): Array<InputItem> => [
-  ...Arr.flatMap(history, turnInput),
-  { role: "user", content: prompt },
+export const inputOf = (
+  history: ReadonlyArray<ChatTurn>,
+  prompt: string,
+  images: ReadonlyArray<string> = [],
+  loaded: LoadedImages = new Map(),
+): Array<InputItem> => [
+  ...Arr.flatMap(history, (turn) => turnInput(turn, loaded)),
+  questionInput(prompt, images, loaded),
 ]
 
-const turnInput = (turn: ChatTurn): Array<InputItem> => [
-  { role: "user", content: turn.prompt },
+const turnInput = (turn: ChatTurn, loaded: LoadedImages): Array<InputItem> => [
+  questionInput(turn.prompt, imagesOf(turn), loaded),
   { role: "assistant", content: turn.answer },
 ]
+
+/** A question as plain text, or as text and images when it has readable images. */
+const questionInput = (
+  prompt: string,
+  images: ReadonlyArray<string>,
+  loaded: LoadedImages,
+): InputItem =>
+  Arr.match(Arr.getSomes(Arr.map(images, (path) => Option.fromNullishOr(loaded.get(path)))), {
+    onEmpty: () => ({ role: "user", content: prompt }),
+    onNonEmpty: (blobs) => ({
+      role: "user",
+      content: [
+        { type: "input_text", text: prompt },
+        ...Arr.map(blobs, (image) => ({ type: "input_image" as const, image })),
+      ],
+    }),
+  })
 
 export const toolsOf = (tools: ReadonlyArray<ChatTool>): Array<Tool> =>
   Arr.map(Arr.dedupe(tools), (tool) =>
@@ -153,9 +187,10 @@ export const requestOf = (
   settings: ChatSettings,
   context: AskContext,
   prompt: string,
+  loaded: LoadedImages = new Map(),
 ): CreateParams => {
   const body = {
-    input: inputOf(context.history, prompt),
+    input: inputOf(context.history, prompt, context.images, loaded),
     prompt_cache_key: `grokcast-chat:${context.conversationId}`,
     ...Option.match(settings.instructions, {
       onNone: () => ({}),
@@ -179,6 +214,28 @@ export const requestOf = (
 
 const makeChat = Effect.fn("Chat.make")(function* () {
   const xai = yield* XaiClient
+  const files = yield* ChatImages
+
+  /**
+   * Read every image the request sends. An image on an earlier turn that can no
+   * longer be read is left out; one attached to this question fails the question.
+   */
+  const loadImages = Effect.fn("Chat.loadImages")(function* (context: AskContext) {
+    const fail = (message: string) => new ChatError({ reason: "failed", message })
+    const current = yield* Effect.forEach(context.images, (path) =>
+      files.read(path).pipe(
+        Effect.map((blob) => [path, blob] as const),
+        Effect.mapError((error) => fail(error.message)),
+      ),
+    )
+    const earlier = yield* Effect.forEach(Arr.flatMap(context.history, imagesOf), (path) =>
+      files.read(path).pipe(
+        Effect.map((blob) => [path, blob] as const),
+        Effect.option,
+      ),
+    )
+    return new Map([...Arr.getSomes(earlier), ...current])
+  })
 
   const ask = Effect.fn("Chat.ask")(function* (
     prompt: string,
@@ -189,11 +246,12 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     const client = yield* xai.client.pipe(
       Effect.mapError((error) => new ChatError({ reason: "failed", message: error.message })),
     )
+    const loaded = yield* loadImages(context)
     const startedAt = yield* Clock.currentTimeMillis
     const seen = { answer: "", citations: Arr.empty<Citation>(), tools: Arr.empty<string>() }
     const response = yield* callXai(async (signal) => {
       const stream = await client.responses.create(
-        { ...requestOf(settings, context, prompt), stream: true },
+        { ...requestOf(settings, context, prompt, loaded), stream: true },
         // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
         { signal, maxRetries: 0, idleTimeout: Duration.toMillis(IDLE_TIMEOUT) },
       )
@@ -240,6 +298,10 @@ const makeChat = Effect.fn("Chat.make")(function* () {
       citations: seen.citations,
       toolsUsed: seen.tools,
       complete: response.status === "completed",
+      images: Arr.match(context.images, {
+        onEmpty: () => Option.none(),
+        onNonEmpty: (images) => Option.some(images),
+      }),
     })
   })
 
@@ -291,6 +353,7 @@ export const turnMarkdown = (turn: ChatTurn): string =>
   Arr.join(
     [
       `**${turn.prompt.trim()}**`,
+      ...Arr.map(imagesOf(turn), imageMarkdown),
       turn.answer === "" ? "_Grok gave no answer._" : turn.answer,
       ...Arr.match(turn.citations, {
         onEmpty: () => [],
