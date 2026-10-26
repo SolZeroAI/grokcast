@@ -1,9 +1,11 @@
 // Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID and
-// dictation settings from preferences, the dictation history in LocalStorage, and
-// the Swift microphone helper from the extension's assets.
+// dictation and Read Aloud settings from preferences, the dictation history in
+// LocalStorage, the Swift microphone helper from the extension's assets, and
+// macOS `afplay` for speech.
 
-import { spawn } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
+import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
@@ -34,6 +36,14 @@ import {
 } from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
 import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
+import { AudioLauncher, PlaybackError, SpeechPlayer } from "./speech-player.ts"
+import {
+  optionalPreference,
+  Speaker,
+  SpeechPreferences,
+  SpeechSettings,
+  speedFromPreference,
+} from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
 import { XaiClient } from "./xai.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
@@ -92,6 +102,9 @@ const Preferences = Schema.Struct({
   formatNumbers: Schema.OptionFromOptionalKey(Schema.Boolean),
   afterDictation: Schema.OptionFromOptionalKey(AfterDictation),
   keepHistory: Schema.OptionFromOptionalKey(Schema.Boolean),
+  voice: Schema.OptionFromOptionalKey(Schema.String),
+  speed: Schema.OptionFromOptionalKey(Schema.String),
+  speechLanguage: Schema.OptionFromOptionalKey(Schema.String),
 })
 
 const preferences = () => Schema.decodeUnknownOption(Preferences)(getPreferenceValues())
@@ -118,6 +131,24 @@ export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () =
     formatNumbers: value((decoded) => decoded.formatNumbers, true),
     afterDictation: value((decoded) => decoded.afterDictation, "paste"),
     keepHistory: value((decoded) => decoded.keepHistory, true),
+  })
+})
+
+/** Read Aloud's preferences. An empty value means xAI's default. */
+export const RaycastSpeechPreferences = Layer.sync(SpeechPreferences, () => {
+  const values = preferences()
+  const text = (pick: (decoded: typeof Preferences.Type) => Option.Option<string>) =>
+    values.pipe(
+      Option.flatMap(pick),
+      Option.getOrElse(() => ""),
+    )
+  return new SpeechSettings({
+    voice: optionalPreference(text((decoded) => decoded.voice)),
+    speed: speedFromPreference(text((decoded) => decoded.speed)),
+    language: Option.getOrElse(
+      optionalPreference(text((decoded) => decoded.speechLanguage)),
+      () => "auto",
+    ),
   })
 })
 
@@ -199,12 +230,54 @@ export const RaycastRecorderLauncher = Layer.succeed(
   }),
 )
 
+const AFPLAY = "/usr/bin/afplay"
+
+/** Speech is written here, then played. Each run replaces the file. */
+const speechFile = () => join(environment.supportPath, "read-aloud.mp3")
+
+/**
+ * Plays speech with macOS `afplay`, detached so it keeps playing after the command
+ * ends. Untested in Tinycast so far.
+ */
+export const RaycastAudioLauncher = Layer.succeed(
+  AudioLauncher,
+  AudioLauncher.of({
+    play: Effect.fn("RaycastAudioLauncher.play")(function* (audio: Uint8Array) {
+      const file = speechFile()
+      yield* Effect.tryPromise({
+        try: async () => {
+          await mkdir(environment.supportPath, { recursive: true })
+          await writeFile(file, audio)
+        },
+        catch: () => new PlaybackError({ message: "Could not save the speech to play it." }),
+      })
+      const child = spawn(AFPLAY, [file], { detached: true, stdio: "ignore" })
+      // A failed start also leaves `pid` empty, which fails below.
+      child.on("error", () => {})
+      child.unref()
+      return yield* Option.match(Option.fromNullishOr(child.pid), {
+        onNone: () =>
+          Effect.fail(new PlaybackError({ message: "Could not start playing the speech." })),
+        onSome: Effect.succeed,
+      })
+    }),
+    isPlaying: (pid) =>
+      Effect.callback<boolean>((resume) => {
+        execFile("/bin/ps", ["-p", String(pid), "-o", "comm="], (error, stdout) => {
+          resume(Effect.succeed(error === null && String(stdout).trim().endsWith("afplay")))
+        })
+      }),
+    stop: (pid) => Effect.try(() => process.kill(pid, "SIGTERM")).pipe(Effect.ignore),
+  }),
+)
+
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), the microphone, and the dictation preferences and history.
+ * in one request), text-to-speech and its player, the microphone, and the dictation
+ * and Read Aloud preferences and the dictation history.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer).pipe(
+  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Speaker.layer).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
     Layer.provideMerge(GrokSession.layer),
@@ -215,8 +288,11 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  DictationHistory.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer).pipe(
+    Layer.provideMerge(Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher)),
+  ),
   RaycastDictationPreferences,
+  RaycastSpeechPreferences,
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */
