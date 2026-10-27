@@ -37,6 +37,7 @@ import {
   RecorderLauncher,
 } from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
+import { GrokFiles } from "./files.ts"
 import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
 import { ModelCatalog } from "./models.ts"
 import { AudioLauncher, PlaybackError, SpeechPlayer } from "./speech-player.ts"
@@ -350,7 +351,8 @@ export const RaycastImageFiles = Layer.succeed(
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
  * in one request), chat, text-to-speech and its player, image and video generation,
- * the model list and tokenizer, the microphone, the preferences, and the saved history.
+ * the model list and tokenizer, files at xAI, the microphone, the preferences, and the
+ * saved history.
  */
 export const GrokLive = Layer.mergeAll(
   Layer.mergeAll(
@@ -361,6 +363,7 @@ export const GrokLive = Layer.mergeAll(
     ImageGenerator.layer,
     VideoGenerator.layer,
     ModelCatalog.layer,
+    GrokFiles.layer,
   ).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),

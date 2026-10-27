@@ -97,6 +97,13 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - Prices are left out of `GrokModel`: a subscription does not pay per token.
 - `ModelCatalog.tokenize` calls `xai.tokenizer.encode`. It needs a model, so Count Tokens is an action on a language model in Grok Models, not a command of its own.
 
+## Files
+
+- `GrokFiles` in `src/lib/files.ts` wraps `xai.files`. `list` asks for 100 files a page, newest first (`sort_by: "created_at"`, `order: "desc"`), and follows `pagination_token` for at most 5 pages. `FileList.more` says when there are more.
+- Expiries (`expires_after`, for uploads and public links) are seconds from 3600 to 2592000. `EXPIRY_CHOICES` lists the ones Grokcast offers. A public link without an expiry keeps the file's own expiry, if it has one.
+- Uploads and downloads may take 5 minutes; other requests 30 seconds. None are retried.
+- `files.tsx` reads and writes files on this Mac with `node:fs/promises`, not `src/lib/`. Downloads go to `~/Downloads` with `flag: "wx"`, so an existing file is never replaced; `savedName` picks the next free name.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.
