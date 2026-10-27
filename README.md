@@ -4,14 +4,14 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 
 ## Status
 
-| Feature                                          | State   |
-| ------------------------------------------------ | ------- |
-| Sign in and sign out with your Grok subscription | Done    |
-| Microphone recorder                              | Done    |
-| Dictate (record, then transcribe)                | Done    |
-| Live dictation with partial text                 | Done    |
-| Read selected text aloud                         | Planned |
-| Generate and edit images                         | Done    |
+| Feature                                          | State |
+| ------------------------------------------------ | ----- |
+| Sign in and sign out with your Grok subscription | Done  |
+| Microphone recorder                              | Done  |
+| Dictate (record, then transcribe)                | Done  |
+| Live dictation with partial text                 | Done  |
+| Read selected text aloud                         | Done  |
+| Generate and edit images                         | Done  |
 
 ## Microphone
 
@@ -31,6 +31,18 @@ Set these in the extension preferences:
 - **Formatting**: write numbers, currencies, and units as digits. This needs a dictation language. Live text always writes them as digits when a language is set; this setting applies when the whole recording is sent.
 - **After Dictation**: paste into the frontmost app, or only copy to the clipboard.
 - **History**: keep the text of your last 100 dictations on this Mac. **Dictation History** lets you search, paste, copy, or delete them. Audio is never saved.
+
+## Read Aloud
+
+**Read Aloud** reads the selected text aloud in a Grok voice. When nothing is selected, it reads the clipboard. You can also type the text into its argument. The speech plays in the background, so you can keep working. Run **Read Aloud** again to stop it. Assign a hotkey to make this one keystroke.
+
+Grok reads up to 60,000 characters at a time. Speech is made by xAI's text-to-speech with your subscription. The audio is kept only until the next run replaces it.
+
+Set these in the command preferences:
+
+- **Voice**: one of Grok's voices, or xAI Default.
+- **Speed**: from 0.7× to 1.5×, or xAI Default.
+- **Reading Language**: the language of the text, or Detect Automatically.
 
 ## Images
 

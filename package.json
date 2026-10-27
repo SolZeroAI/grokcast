@@ -82,6 +82,273 @@
       "mode": "view"
     },
     {
+      "name": "read-aloud",
+      "title": "Read Aloud",
+      "subtitle": "Grokcast",
+      "description": "Read the selected text aloud in a Grok voice, or the clipboard when nothing is selected. Run it again to stop. Spoken by Grok with your subscription.",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "text",
+          "placeholder": "Text",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "preferences": [
+        {
+          "name": "voice",
+          "title": "Voice",
+          "description": "The Grok voice that reads the text. xAI Default follows xAI's choice.",
+          "type": "dropdown",
+          "required": false,
+          "default": "default",
+          "data": [
+            {
+              "title": "xAI Default",
+              "value": "default"
+            },
+            {
+              "title": "Altair (Elegant and premium)",
+              "value": "altair"
+            },
+            {
+              "title": "Ara (Warm and friendly)",
+              "value": "ara"
+            },
+            {
+              "title": "Atlas (Confident and commanding)",
+              "value": "atlas"
+            },
+            {
+              "title": "Aurora (Serene and radiant)",
+              "value": "aurora"
+            },
+            {
+              "title": "Carina (Soft and empathetic)",
+              "value": "carina"
+            },
+            {
+              "title": "Castor (Down-to-earth and easygoing)",
+              "value": "castor"
+            },
+            {
+              "title": "Celeste (Compassionate and reassuring)",
+              "value": "celeste"
+            },
+            {
+              "title": "Cosmo (Bright and easy to follow)",
+              "value": "cosmo"
+            },
+            {
+              "title": "Eve (Energetic and upbeat, British accent)",
+              "value": "eve"
+            },
+            {
+              "title": "Helios (Upbeat and versatile)",
+              "value": "helios"
+            },
+            {
+              "title": "Helix (Bold and high-energy)",
+              "value": "helix"
+            },
+            {
+              "title": "Iris (Friendly and upbeat)",
+              "value": "iris"
+            },
+            {
+              "title": "Kepler (Inventive and charismatic)",
+              "value": "kepler"
+            },
+            {
+              "title": "Leo (Authoritative and strong, British accent)",
+              "value": "leo"
+            },
+            {
+              "title": "Liora (Calm and luminous)",
+              "value": "liora"
+            },
+            {
+              "title": "Lumen (Warm and articulate)",
+              "value": "lumen"
+            },
+            {
+              "title": "Luna (Gentle and nurturing)",
+              "value": "luna"
+            },
+            {
+              "title": "Lux (Calm and wise)",
+              "value": "lux"
+            },
+            {
+              "title": "Naksh (Warm and thoughtful, Indian accent)",
+              "value": "naksh"
+            },
+            {
+              "title": "Orion (Rich and cinematic)",
+              "value": "orion"
+            },
+            {
+              "title": "Perseus (Strong and trustworthy)",
+              "value": "perseus"
+            },
+            {
+              "title": "Rex (Confident and clear)",
+              "value": "rex"
+            },
+            {
+              "title": "Rigel (Precise and professional, Australian accent)",
+              "value": "rigel"
+            },
+            {
+              "title": "Sal (Smooth and balanced)",
+              "value": "sal"
+            },
+            {
+              "title": "Sirius (Quick-witted and playful)",
+              "value": "sirius"
+            },
+            {
+              "title": "Ursa (Warm and steadfast)",
+              "value": "ursa"
+            },
+            {
+              "title": "Zagan (Powerful and dramatic)",
+              "value": "zagan"
+            },
+            {
+              "title": "Zenith (Sharp and driven)",
+              "value": "zenith"
+            }
+          ]
+        },
+        {
+          "name": "speed",
+          "title": "Speed",
+          "description": "How fast the voice reads.",
+          "type": "dropdown",
+          "required": false,
+          "default": "default",
+          "data": [
+            {
+              "title": "xAI Default",
+              "value": "default"
+            },
+            {
+              "title": "Slower (0.7×)",
+              "value": "0.7"
+            },
+            {
+              "title": "Slow (0.85×)",
+              "value": "0.85"
+            },
+            {
+              "title": "Fast (1.25×)",
+              "value": "1.25"
+            },
+            {
+              "title": "Faster (1.5×)",
+              "value": "1.5"
+            }
+          ]
+        },
+        {
+          "name": "speechLanguage",
+          "title": "Reading Language",
+          "description": "The language of the text. Detect Automatically works for most text.",
+          "type": "dropdown",
+          "required": false,
+          "default": "auto",
+          "data": [
+            {
+              "title": "Detect Automatically",
+              "value": "auto"
+            },
+            {
+              "title": "English",
+              "value": "en"
+            },
+            {
+              "title": "Arabic (Egypt)",
+              "value": "ar-EG"
+            },
+            {
+              "title": "Arabic (Saudi Arabia)",
+              "value": "ar-SA"
+            },
+            {
+              "title": "Arabic (UAE)",
+              "value": "ar-AE"
+            },
+            {
+              "title": "Bengali",
+              "value": "bn"
+            },
+            {
+              "title": "Chinese",
+              "value": "zh"
+            },
+            {
+              "title": "French",
+              "value": "fr"
+            },
+            {
+              "title": "German",
+              "value": "de"
+            },
+            {
+              "title": "Hindi",
+              "value": "hi"
+            },
+            {
+              "title": "Indonesian",
+              "value": "id"
+            },
+            {
+              "title": "Italian",
+              "value": "it"
+            },
+            {
+              "title": "Japanese",
+              "value": "ja"
+            },
+            {
+              "title": "Korean",
+              "value": "ko"
+            },
+            {
+              "title": "Portuguese (Brazil)",
+              "value": "pt-BR"
+            },
+            {
+              "title": "Portuguese (Portugal)",
+              "value": "pt-PT"
+            },
+            {
+              "title": "Russian",
+              "value": "ru"
+            },
+            {
+              "title": "Spanish (Mexico)",
+              "value": "es-MX"
+            },
+            {
+              "title": "Spanish (Spain)",
+              "value": "es-ES"
+            },
+            {
+              "title": "Turkish",
+              "value": "tr"
+            },
+            {
+              "title": "Vietnamese",
+              "value": "vi"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "generate-image",
       "title": "Generate Image",
       "subtitle": "Grokcast",
