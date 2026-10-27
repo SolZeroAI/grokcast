@@ -1,9 +1,11 @@
 // Raycast wiring: tokens in Raycast's encrypted OAuth store, the client ID and
-// dictation settings from preferences, the dictation history in LocalStorage, and
-// the Swift microphone helper from the extension's assets.
+// dictation and Read Aloud settings from preferences, the dictation history in
+// LocalStorage, the Swift microphone helper from the extension's assets, and
+// macOS `afplay` for speech.
 
-import { spawn } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
+import { mkdir, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
@@ -22,6 +24,8 @@ import {
   languageFromPreference,
 } from "./dictation.ts"
 import { DictationHistory } from "./history.ts"
+import { ImageFileError, ImageFiles, ImageLibrary } from "./image-library.ts"
+import { ImageGenerator } from "./images.ts"
 import { ClientId, DEFAULT_CLIENT_ID, XaiEndpoints } from "./oauth.ts"
 import {
   exitFromCode,
@@ -35,8 +39,20 @@ import {
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
 import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
 import { ModelCatalog } from "./models.ts"
+import { AudioLauncher, PlaybackError, SpeechPlayer } from "./speech-player.ts"
+import {
+  optionalPreference,
+  Speaker,
+  SpeechPreferences,
+  SpeechSettings,
+  speedFromPreference,
+} from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
+import { VideoGenerator } from "./video.ts"
 import { XaiClient } from "./xai.ts"
+import { Chat, ChatPreferences, ChatSettings, ChatTool, ReasoningEffort } from "./chat.ts"
+import { ChatConversations } from "./conversations.ts"
+import { ChatImages } from "./chat-images.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `account.tsx`,
@@ -93,6 +109,9 @@ const Preferences = Schema.Struct({
   formatNumbers: Schema.OptionFromOptionalKey(Schema.Boolean),
   afterDictation: Schema.OptionFromOptionalKey(AfterDictation),
   keepHistory: Schema.OptionFromOptionalKey(Schema.Boolean),
+  voice: Schema.OptionFromOptionalKey(Schema.String),
+  speed: Schema.OptionFromOptionalKey(Schema.String),
+  speechLanguage: Schema.OptionFromOptionalKey(Schema.String),
 })
 
 const preferences = () => Schema.decodeUnknownOption(Preferences)(getPreferenceValues())
@@ -119,6 +138,24 @@ export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () =
     formatNumbers: value((decoded) => decoded.formatNumbers, true),
     afterDictation: value((decoded) => decoded.afterDictation, "paste"),
     keepHistory: value((decoded) => decoded.keepHistory, true),
+  })
+})
+
+/** Read Aloud's preferences. An empty value means xAI's default. */
+export const RaycastSpeechPreferences = Layer.sync(SpeechPreferences, () => {
+  const values = preferences()
+  const text = (pick: (decoded: typeof Preferences.Type) => Option.Option<string>) =>
+    values.pipe(
+      Option.flatMap(pick),
+      Option.getOrElse(() => ""),
+    )
+  return new SpeechSettings({
+    voice: optionalPreference(text((decoded) => decoded.voice)),
+    speed: speedFromPreference(text((decoded) => decoded.speed)),
+    language: Option.getOrElse(
+      optionalPreference(text((decoded) => decoded.speechLanguage)),
+      () => "auto",
+    ),
   })
 })
 
@@ -167,6 +204,54 @@ export const RaycastMicrophonePermission = Layer.succeed(
   }),
 )
 
+const ChatPreferenceValues = Schema.Struct({
+  chatModel: Schema.OptionFromOptionalKey(Schema.String),
+  reasoningEffort: Schema.OptionFromOptionalKey(Schema.String),
+  chatInstructions: Schema.OptionFromOptionalKey(Schema.String),
+  webSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  xSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  codeExecution: Schema.OptionFromOptionalKey(Schema.Boolean),
+})
+
+const filled = (text: Option.Option<string>) =>
+  text.pipe(
+    Option.map((value) => value.trim()),
+    Option.filter((value) => value !== ""),
+  )
+
+/** Grok Chat's command preferences. Defaults match `package.json`. */
+export const RaycastChatPreferences = Layer.sync(ChatPreferences, () => {
+  const values = Schema.decodeUnknownOption(ChatPreferenceValues)(getPreferenceValues())
+  const pick = <A>(f: (decoded: typeof ChatPreferenceValues.Type) => Option.Option<A>) =>
+    Option.flatMap(values, f)
+  const on = (tool: ChatTool, enabled: Option.Option<boolean>, fallback: boolean) =>
+    Option.getOrElse(enabled, () => fallback) ? [tool] : []
+  return new ChatSettings({
+    model: filled(pick((decoded) => decoded.chatModel)),
+    reasoningEffort: pick((decoded) => decoded.reasoningEffort).pipe(
+      Option.flatMap(Schema.decodeUnknownOption(ReasoningEffort)),
+    ),
+    instructions: filled(pick((decoded) => decoded.chatInstructions)),
+    tools: [
+      ...on(
+        "webSearch",
+        pick((decoded) => decoded.webSearch),
+        true,
+      ),
+      ...on(
+        "xSearch",
+        pick((decoded) => decoded.xSearch),
+        true,
+      ),
+      ...on(
+        "codeExecution",
+        pick((decoded) => decoded.codeExecution),
+        false,
+      ),
+    ],
+  })
+})
+
 /** `ray build` compiles `recorder/` to this path in the extension's assets. */
 const recorderBinary = () => join(environment.assetsPath, "compiled_raycast_swift", "recorder")
 
@@ -200,15 +285,86 @@ export const RaycastRecorderLauncher = Layer.succeed(
   }),
 )
 
+const AFPLAY = "/usr/bin/afplay"
+
+/** Speech is written here, then played. Each run replaces the file. */
+const speechFile = () => join(environment.supportPath, "read-aloud.mp3")
+
+/**
+ * Plays speech with macOS `afplay`, detached so it keeps playing after the command
+ * ends. Untested in Tinycast so far.
+ */
+export const RaycastAudioLauncher = Layer.succeed(
+  AudioLauncher,
+  AudioLauncher.of({
+    play: Effect.fn("RaycastAudioLauncher.play")(function* (audio: Uint8Array) {
+      const file = speechFile()
+      yield* Effect.tryPromise({
+        try: async () => {
+          await mkdir(environment.supportPath, { recursive: true })
+          await writeFile(file, audio)
+        },
+        catch: () => new PlaybackError({ message: "Could not save the speech to play it." }),
+      })
+      const child = spawn(AFPLAY, [file], { detached: true, stdio: "ignore" })
+      // A failed start also leaves `pid` empty, which fails below.
+      child.on("error", () => {})
+      child.unref()
+      return yield* Option.match(Option.fromNullishOr(child.pid), {
+        onNone: () =>
+          Effect.fail(new PlaybackError({ message: "Could not start playing the speech." })),
+        onSome: Effect.succeed,
+      })
+    }),
+    isPlaying: (pid) =>
+      Effect.callback<boolean>((resume) => {
+        execFile("/bin/ps", ["-p", String(pid), "-o", "comm="], (error, stdout) => {
+          resume(Effect.succeed(error === null && String(stdout).trim().endsWith("afplay")))
+        })
+      }),
+    stop: (pid) => Effect.try(() => process.kill(pid, "SIGTERM")).pipe(Effect.ignore),
+  }),
+)
+
+/** Images Grok made, in the extension's support folder. Raycast deletes it with the extension. */
+const imageFolder = () => join(environment.supportPath, "images")
+
+const fileCall = <A>(message: string, call: () => Promise<A>) =>
+  Effect.tryPromise({ try: call, catch: (cause) => new ImageFileError({ message, cause }) })
+
+export const RaycastImageFiles = Layer.succeed(
+  ImageFiles,
+  ImageFiles.of({
+    write: (name, bytes) =>
+      fileCall("Could not save the image.", async () => {
+        const folder = imageFolder()
+        await mkdir(folder, { recursive: true })
+        const path = join(folder, name)
+        await writeFile(path, bytes)
+        return path
+      }),
+    remove: (path) => fileCall("Could not delete the image.", () => rm(path, { force: true })),
+  }),
+)
+
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), the model list and tokenizer, the microphone, and the dictation
- * preferences and history.
+ * in one request), chat, text-to-speech and its player, image and video generation,
+ * the model list and tokenizer, the microphone, the preferences, and the saved history.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, ModelCatalog.layer).pipe(
+  Layer.mergeAll(
+    Transcriber.layer,
+    LiveTranscriber.layer,
+    Chat.layer,
+    Speaker.layer,
+    ImageGenerator.layer,
+    VideoGenerator.layer,
+    ModelCatalog.layer,
+  ).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
+    Layer.provideMerge(ChatImages.layer),
     Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(XaiEndpoints.layer),
     Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),
@@ -217,8 +373,15 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  DictationHistory.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer, ImageLibrary.layer).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher, RaycastImageFiles),
+    ),
+  ),
   RaycastDictationPreferences,
+  RaycastSpeechPreferences,
+  ChatConversations.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  RaycastChatPreferences,
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */
