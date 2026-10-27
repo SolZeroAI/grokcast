@@ -368,6 +368,13 @@
       "subtitle": "Grokcast",
       "description": "Browse, copy, paste, or edit the images Grok made for you.",
       "mode": "view"
+    },
+    {
+      "name": "generate-video",
+      "title": "Generate Video",
+      "subtitle": "Grokcast",
+      "description": "Make a video with Grok from a prompt or a picture, or edit or extend an MP4. Uses your Grok or X subscription.",
+      "mode": "view"
     }
   ],
   "preferences": [

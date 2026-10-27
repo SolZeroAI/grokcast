@@ -47,6 +47,7 @@ import {
   speedFromPreference,
 } from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
+import { VideoGenerator } from "./video.ts"
 import { XaiClient } from "./xai.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
@@ -296,8 +297,9 @@ export const RaycastImageFiles = Layer.succeed(
 
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), text-to-speech and its player, image generation, the microphone,
- * the dictation and Read Aloud preferences, the dictation history, and the image library.
+ * in one request), text-to-speech and its player, image and video generation, the
+ * microphone, the dictation and Read Aloud preferences, the dictation history, and the
+ * image library.
  */
 export const GrokLive = Layer.mergeAll(
   Layer.mergeAll(
@@ -305,6 +307,7 @@ export const GrokLive = Layer.mergeAll(
     LiveTranscriber.layer,
     Speaker.layer,
     ImageGenerator.layer,
+    VideoGenerator.layer,
   ).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),

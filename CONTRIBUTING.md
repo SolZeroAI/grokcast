@@ -69,6 +69,16 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
 - `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
 
+## Video generation
+
+`VideoGenerator` in `src/lib/video.ts` uses the SDK's `videos.generate`, `videos.edit`, `videos.extend`, and `videos.get`:
+
+- Never set `model`. SDK 0.2.4's types require it, but the API uses xAI's default without it, so `withXaiDefaultModel` leaves it out (the one type assertion, with a SAFETY comment).
+- Pictures and MP4s go as `Blob`s; the SDK sends them inline as data URLs.
+- A job starts with a `request_id`. `follow` polls `videos.get` every 5 seconds with an Effect `Schedule` instead of the SDK's `wait`, so it reports xAI's `progress` and runs on `TestClock` in tests. After 10 minutes it fails with the request ID, and the UI offers **Check Again**.
+- `pending` (also a 202 with no body) keeps polling. `done` without a URL, or with `respect_moderation: false`, means moderation blocked the video. `failed` passes on xAI's message. `expired` means the result is gone.
+- The video URL is public and temporary. `download` fetches it with the Effect `HttpClient`, without the Grok token.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.
