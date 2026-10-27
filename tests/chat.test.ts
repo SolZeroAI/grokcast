@@ -320,7 +320,7 @@ describe("Chat.ask", () => {
       fakeFetch(() => json({ code: "personal-team-blocked:spending-limit" }, 402)),
     )
     assert.equal(error.reason, "plan")
-    assert.match(error.message, /no Grok subscription/)
+    assert.match(error.message, /out of credits/)
   })
 
   it("reports a stream that ends before the answer completes", async () => {

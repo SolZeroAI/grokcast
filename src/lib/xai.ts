@@ -99,7 +99,7 @@ export const describeXaiError = (error: XaiSdkError, wording: XaiFeatureWording)
           () =>
             failure(
               "plan",
-              "xAI says this account has no Grok subscription or has run out of credits. Sign in with the account that has your Grok or X plan.",
+              "xAI says this account is out of credits or its plan does not cover this. Check your usage and plan at grok.com.",
             ),
         ),
         Match.when(Match.instanceOf(APIStatusError), (status) =>
