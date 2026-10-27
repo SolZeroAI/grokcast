@@ -347,6 +347,27 @@
           ]
         }
       ]
+    },
+    {
+      "name": "generate-image",
+      "title": "Generate Image",
+      "subtitle": "Grokcast",
+      "description": "Describe an image and Grok makes it with your subscription. Copy, paste, or save the result.",
+      "mode": "view"
+    },
+    {
+      "name": "edit-image",
+      "title": "Edit Image",
+      "subtitle": "Grokcast",
+      "description": "Change up to three images with a prompt. Uses the images selected in Finder when there are any.",
+      "mode": "view"
+    },
+    {
+      "name": "image-history",
+      "title": "Image History",
+      "subtitle": "Grokcast",
+      "description": "Browse, copy, paste, or edit the images Grok made for you.",
+      "mode": "view"
     }
   ],
   "preferences": [

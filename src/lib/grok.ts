@@ -5,7 +5,7 @@
 
 import { execFile, spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
@@ -24,6 +24,8 @@ import {
   languageFromPreference,
 } from "./dictation.ts"
 import { DictationHistory } from "./history.ts"
+import { ImageFileError, ImageFiles, ImageLibrary } from "./image-library.ts"
+import { ImageGenerator } from "./images.ts"
 import { ClientId, DEFAULT_CLIENT_ID, XaiEndpoints } from "./oauth.ts"
 import {
   exitFromCode,
@@ -271,13 +273,39 @@ export const RaycastAudioLauncher = Layer.succeed(
   }),
 )
 
+/** Images Grok made, in the extension's support folder. Raycast deletes it with the extension. */
+const imageFolder = () => join(environment.supportPath, "images")
+
+const fileCall = <A>(message: string, call: () => Promise<A>) =>
+  Effect.tryPromise({ try: call, catch: (cause) => new ImageFileError({ message, cause }) })
+
+export const RaycastImageFiles = Layer.succeed(
+  ImageFiles,
+  ImageFiles.of({
+    write: (name, bytes) =>
+      fileCall("Could not save the image.", async () => {
+        const folder = imageFolder()
+        await mkdir(folder, { recursive: true })
+        const path = join(folder, name)
+        await writeFile(path, bytes)
+        return path
+      }),
+    remove: (path) => fileCall("Could not delete the image.", () => rm(path, { force: true })),
+  }),
+)
+
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), text-to-speech and its player, the microphone, and the dictation
- * and Read Aloud preferences and the dictation history.
+ * in one request), text-to-speech and its player, image generation, the microphone,
+ * the dictation and Read Aloud preferences, the dictation history, and the image library.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Speaker.layer).pipe(
+  Layer.mergeAll(
+    Transcriber.layer,
+    LiveTranscriber.layer,
+    Speaker.layer,
+    ImageGenerator.layer,
+  ).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
     Layer.provideMerge(GrokSession.layer),
@@ -288,8 +316,10 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher)),
+  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer, ImageLibrary.layer).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher, RaycastImageFiles),
+    ),
   ),
   RaycastDictationPreferences,
   RaycastSpeechPreferences,

@@ -60,6 +60,15 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - `RaycastAudioLauncher` writes the audio to `read-aloud.mp3` in the extension's support folder and plays it with `/usr/bin/afplay`, detached so it outlives the command. Stop it with SIGTERM.
 - `read-aloud.tsx` is a no-view command. It reads its argument, then the selection, then the clipboard (`firstText`), and stops at the first with text.
 
+## Images
+
+`ImageGenerator` in `src/lib/images.ts` calls `images.generate`, or `images.edit` when there are source images:
+
+- The request leaves out `model`, so xAI uses its current image model. The SDK types `model` as required, so the body has one type assertion with a `SAFETY` comment.
+- It asks for `response_format: "b64_json"`, so the bytes arrive in the response and nothing is fetched from a second URL. A missing `mime_type` means JPEG, xAI's default.
+- One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
+- `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.
