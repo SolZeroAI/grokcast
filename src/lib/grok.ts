@@ -5,7 +5,7 @@
 
 import { execFile, spawn } from "node:child_process"
 import { chmodSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
@@ -24,6 +24,8 @@ import {
   languageFromPreference,
 } from "./dictation.ts"
 import { DictationHistory } from "./history.ts"
+import { ImageFileError, ImageFiles, ImageLibrary } from "./image-library.ts"
+import { ImageGenerator } from "./images.ts"
 import { ClientId, DEFAULT_CLIENT_ID, XaiEndpoints } from "./oauth.ts"
 import {
   exitFromCode,
@@ -35,7 +37,9 @@ import {
   RecorderLauncher,
 } from "./recorder.ts"
 import { GrokSession, StoredTokens, TokenStore, TokenStoreError } from "./session.ts"
+import { GrokFiles } from "./files.ts"
 import { LiveTranscriber, WsWebSocketConstructor } from "./live-transcriber.ts"
+import { ModelCatalog } from "./models.ts"
 import { AudioLauncher, PlaybackError, SpeechPlayer } from "./speech-player.ts"
 import {
   optionalPreference,
@@ -46,7 +50,11 @@ import {
 } from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
 import { ReadAloudVoice, VoiceLibrary } from "./voices.ts"
+import { VideoGenerator } from "./video.ts"
 import { XaiClient } from "./xai.ts"
+import { Chat, ChatPreferences, ChatSettings, ChatTool, ReasoningEffort } from "./chat.ts"
+import { ChatConversations } from "./conversations.ts"
+import { ChatImages } from "./chat-images.ts"
 import { microphoneAccess, requestMicrophoneAccess } from "swift:../../recorder"
 
 // Only the token store is used. Sign-in runs the device-code flow in `account.tsx`,
@@ -198,6 +206,54 @@ export const RaycastMicrophonePermission = Layer.succeed(
   }),
 )
 
+const ChatPreferenceValues = Schema.Struct({
+  chatModel: Schema.OptionFromOptionalKey(Schema.String),
+  reasoningEffort: Schema.OptionFromOptionalKey(Schema.String),
+  chatInstructions: Schema.OptionFromOptionalKey(Schema.String),
+  webSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  xSearch: Schema.OptionFromOptionalKey(Schema.Boolean),
+  codeExecution: Schema.OptionFromOptionalKey(Schema.Boolean),
+})
+
+const filled = (text: Option.Option<string>) =>
+  text.pipe(
+    Option.map((value) => value.trim()),
+    Option.filter((value) => value !== ""),
+  )
+
+/** Grok Chat's command preferences. Defaults match `package.json`. */
+export const RaycastChatPreferences = Layer.sync(ChatPreferences, () => {
+  const values = Schema.decodeUnknownOption(ChatPreferenceValues)(getPreferenceValues())
+  const pick = <A>(f: (decoded: typeof ChatPreferenceValues.Type) => Option.Option<A>) =>
+    Option.flatMap(values, f)
+  const on = (tool: ChatTool, enabled: Option.Option<boolean>, fallback: boolean) =>
+    Option.getOrElse(enabled, () => fallback) ? [tool] : []
+  return new ChatSettings({
+    model: filled(pick((decoded) => decoded.chatModel)),
+    reasoningEffort: pick((decoded) => decoded.reasoningEffort).pipe(
+      Option.flatMap(Schema.decodeUnknownOption(ReasoningEffort)),
+    ),
+    instructions: filled(pick((decoded) => decoded.chatInstructions)),
+    tools: [
+      ...on(
+        "webSearch",
+        pick((decoded) => decoded.webSearch),
+        true,
+      ),
+      ...on(
+        "xSearch",
+        pick((decoded) => decoded.xSearch),
+        true,
+      ),
+      ...on(
+        "codeExecution",
+        pick((decoded) => decoded.codeExecution),
+        false,
+      ),
+    ],
+  })
+})
+
 /** `ray build` compiles `recorder/` to this path in the extension's assets. */
 const recorderBinary = () => join(environment.assetsPath, "compiled_raycast_swift", "recorder")
 
@@ -272,16 +328,48 @@ export const RaycastAudioLauncher = Layer.succeed(
   }),
 )
 
+/** Images Grok made, in the extension's support folder. Raycast deletes it with the extension. */
+const imageFolder = () => join(environment.supportPath, "images")
+
+const fileCall = <A>(message: string, call: () => Promise<A>) =>
+  Effect.tryPromise({ try: call, catch: (cause) => new ImageFileError({ message, cause }) })
+
+export const RaycastImageFiles = Layer.succeed(
+  ImageFiles,
+  ImageFiles.of({
+    write: (name, bytes) =>
+      fileCall("Could not save the image.", async () => {
+        const folder = imageFolder()
+        await mkdir(folder, { recursive: true })
+        const path = join(folder, name)
+        await writeFile(path, bytes)
+        return path
+      }),
+    remove: (path) => fileCall("Could not delete the image.", () => rm(path, { force: true })),
+  }),
+)
+
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), text-to-speech and its player, built-in and custom voices, the
- * microphone, the dictation and Read Aloud preferences, the voice picked for Read
- * Aloud, and the dictation history.
+ * in one request), chat, text-to-speech and its player, built-in and custom voices,
+ * image and video generation, the model list and tokenizer, files at xAI, the
+ * microphone, the preferences, the voice picked for Read Aloud, and the saved history.
  */
 export const GrokLive = Layer.mergeAll(
-  Layer.mergeAll(Transcriber.layer, LiveTranscriber.layer, Speaker.layer, VoiceLibrary.layer).pipe(
+  Layer.mergeAll(
+    Transcriber.layer,
+    LiveTranscriber.layer,
+    Chat.layer,
+    Speaker.layer,
+    VoiceLibrary.layer,
+    ImageGenerator.layer,
+    VideoGenerator.layer,
+    ModelCatalog.layer,
+    GrokFiles.layer,
+  ).pipe(
     Layer.provideMerge(WsWebSocketConstructor),
     Layer.provideMerge(XaiClient.layer),
+    Layer.provideMerge(ChatImages.layer),
     Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(XaiEndpoints.layer),
     Layer.provideMerge(Layer.mergeAll(RaycastTokenStore, RaycastClientId)),
@@ -290,11 +378,20 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer, ReadAloudVoice.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher)),
+  Layer.mergeAll(
+    DictationHistory.layer,
+    SpeechPlayer.layer,
+    ReadAloudVoice.layer,
+    ImageLibrary.layer,
+  ).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher, RaycastImageFiles),
+    ),
   ),
   RaycastDictationPreferences,
   RaycastSpeechPreferences,
+  ChatConversations.layer.pipe(Layer.provideMerge(RaycastKeyValueStore)),
+  RaycastChatPreferences,
 )
 
 /** Runs command programs with `GrokLive`. Each command builds it once. */

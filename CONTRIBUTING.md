@@ -42,6 +42,18 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in 
 - Tinycast's `Request` has no `clone()`, so `GrokSession.fetch` copies a request with `new Request(request)` there. Tinycast can send the same body twice; Node cannot, so Node still uses `clone()`.
 - Speech-to-text sends raw PCM (`audio_format: "pcm"`, `sample_rate: 16000`) as one multipart request. A 429 is not retried, because on a subscription it usually means the usage limit.
 
+## Chat
+
+`Chat` in `src/lib/chat.ts` streams answers from the Responses API (`client.responses.create` with `stream: true`) through `XaiClient`. `ChatConversations` in `src/lib/conversations.ts` keeps saved conversations in the `KeyValueStore`.
+
+- The request leaves out `model` unless the user sets one in the command preferences, so xAI's default model and its upgrades apply. The SDK's type requires `model`, but the API does not; `requestOf` has the one type assertion.
+- `store` stays `false` (the SDK default). Each new question resends the earlier turns as plain user and assistant messages, so a saved conversation continues the same way. Reasoning state is not carried between turns.
+- `prompt_cache_key` is `grokcast-chat:<conversation id>`, so the turns of one conversation share xAI's prompt cache.
+- Grok's tools are `webSearch()`, `xSearch()`, and `codeExecution()` from `@xai-official/sdk/tools`. xAI runs them; the extension only shows what they did (`toolLabel`) and the URL citations.
+- A 429 is not retried, because on a subscription it usually means the usage limit. Interrupting the fiber aborts the request.
+- Image understanding goes through the same request. `ChatImages` (`src/lib/chat-images.ts`) reads JPEG, PNG, or WebP files of up to 20 MB as `Blob`s, which the SDK sends as `input_image` data URLs. A turn saves only the image paths. Images on earlier turns are sent again when their files can still be read and are skipped when they cannot. An unreadable image on the new question fails it before anything is sent.
+- `src/chat.tsx` redraws a streaming answer at most every 150 ms, because Tinycast sends the whole view on every update.
+
 ## Live speech-to-text
 
 The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `src/lib/live-transcriber.ts` talks to `wss://api.x.ai/v1/stt` with Effect's `Socket`:
@@ -59,6 +71,38 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - `SpeechPlayer` in `src/lib/speech-player.ts` plays in the background and keeps the player's process ID in LocalStorage, so the next run can stop it. Before it stops a process, `AudioLauncher.isPlaying` checks that the ID still belongs to `afplay`.
 - `RaycastAudioLauncher` writes the audio to `read-aloud.mp3` in the extension's support folder and plays it with `/usr/bin/afplay`, detached so it outlives the command. Stop it with SIGTERM.
 - `read-aloud.tsx` is a no-view command. It reads its argument, then the selection, then the clipboard (`firstText`), and stops at the first with text.
+
+## Images
+
+`ImageGenerator` in `src/lib/images.ts` calls `images.generate`, or `images.edit` when there are source images:
+
+- The request leaves out `model`, so xAI uses its current image model. The SDK types `model` as required, so the body has one type assertion with a `SAFETY` comment.
+- It asks for `response_format: "b64_json"`, so the bytes arrive in the response and nothing is fetched from a second URL. A missing `mime_type` means JPEG, xAI's default.
+- One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
+- `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
+
+## Video generation
+
+`VideoGenerator` in `src/lib/video.ts` uses the SDK's `videos.generate`, `videos.edit`, `videos.extend`, and `videos.get`:
+
+- Never set `model`. SDK 0.2.4's types require it, but the API uses xAI's default without it, so `withXaiDefaultModel` leaves it out (the one type assertion, with a SAFETY comment).
+- Pictures and MP4s go as `Blob`s; the SDK sends them inline as data URLs.
+- A job starts with a `request_id`. `follow` polls `videos.get` every 5 seconds with an Effect `Schedule` instead of the SDK's `wait`, so it reports xAI's `progress` and runs on `TestClock` in tests. After 10 minutes it fails with the request ID, and the UI offers **Check Again**.
+- `pending` (also a 202 with no body) keeps polling. `done` without a URL, or with `respect_moderation: false`, means moderation blocked the video. `failed` passes on xAI's message. `expired` means the result is gone.
+- The video URL is public and temporary. `download` fetches it with the Effect `HttpClient`, without the Grok token.
+
+## Models
+
+- `ModelCatalog` in `src/lib/models.ts` lists `xai.models.language`, `xai.models.image`, and `xai.models.video` at the same time. Only the general `xai.models.list()` gives context lengths, so it runs too, and its failure only leaves context lengths out.
+- Prices are left out of `GrokModel`: a subscription does not pay per token.
+- `ModelCatalog.tokenize` calls `xai.tokenizer.encode`. It needs a model, so Count Tokens is an action on a language model in Grok Models, not a command of its own.
+
+## Files
+
+- `GrokFiles` in `src/lib/files.ts` wraps `xai.files`. `list` asks for 100 files a page, newest first (`sort_by: "created_at"`, `order: "desc"`), and follows `pagination_token` for at most 5 pages. `FileList.more` says when there are more.
+- Expiries (`expires_after`, for uploads and public links) are seconds from 3600 to 2592000. `EXPIRY_CHOICES` lists the ones Grokcast offers. A public link without an expiry keeps the file's own expiry, if it has one.
+- Uploads and downloads may take 5 minutes; other requests 30 seconds. None are retried.
+- `files.tsx` reads and writes files on this Mac with `node:fs/promises`, not `src/lib/`. Downloads go to `~/Downloads` with `flag: "wx"`, so an existing file is never replaced; `savedName` picks the next free name.
 
 ## Voices
 
