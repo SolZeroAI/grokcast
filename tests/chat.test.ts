@@ -15,6 +15,7 @@ import {
   ChatSettings,
   ChatTurn,
   Citation,
+  DEFAULT_CHAT_MODEL,
   inputOf,
   titleOf,
   toolLabel,
@@ -254,11 +255,11 @@ describe("Chat.ask", () => {
     assert.equal(request?.headers.get("authorization"), "Bearer a1")
   })
 
-  it("leaves the model to xAI and sends Grok's tools, unstored, with a cache key per conversation", async () => {
+  it("sends the default model and Grok's tools, unstored, with a cache key per conversation", async () => {
     const fetch = fakeFetch(answerStream)
     await ask(fetch)
     const body = bodyOf(fetch)
-    assert.equal(body.model, undefined)
+    assert.equal(body.model, DEFAULT_CHAT_MODEL)
     assert.equal(body.reasoning, undefined)
     assert.equal(body.instructions, undefined)
     assert.equal(body.stream, true)
@@ -312,6 +313,14 @@ describe("Chat.ask", () => {
     const limit = await askError(limited)
     assert.equal(limit.reason, "usageLimit")
     assert.equal(limited.requests.length, 1)
+  })
+
+  it("explains a 402 as an account without a plan or credits", async () => {
+    const error = await askError(
+      fakeFetch(() => json({ code: "personal-team-blocked:spending-limit" }, 402)),
+    )
+    assert.equal(error.reason, "plan")
+    assert.match(error.message, /no Grok subscription/)
   })
 
   it("reports a stream that ends before the answer completes", async () => {

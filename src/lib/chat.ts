@@ -23,11 +23,17 @@ const IDLE_TIMEOUT = Duration.minutes(3)
 export const ChatTool = Schema.Literals(["webSearch", "xSearch", "codeExecution"])
 export type ChatTool = typeof ChatTool.Type
 
+/**
+ * The model used when the user sets none. xAI's Responses API has no default
+ * model: a request without one fails with "The model latest does not exist".
+ */
+export const DEFAULT_CHAT_MODEL = "grok-4.7"
+
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high"])
 export type ReasoningEffort = typeof ReasoningEffort.Type
 
 export class ChatSettings extends Schema.Class<ChatSettings>("ChatSettings")({
-  /** A model ID such as `grok-4.7`. None leaves it to xAI, so its default and upgrades apply. */
+  /** A model ID such as `grok-4.7`. None uses `DEFAULT_CHAT_MODEL`. */
   model: Schema.Option(Schema.String),
   /** None leaves it to the model. */
   reasoningEffort: Schema.Option(ReasoningEffort),
@@ -182,35 +188,29 @@ export const titleOf = (prompt: string, max = 60): string => {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
-/** The request body. The model is left out unless the user picked one. */
+/** The request body, with the user's model or `DEFAULT_CHAT_MODEL`. */
 export const requestOf = (
   settings: ChatSettings,
   context: AskContext,
   prompt: string,
   loaded: LoadedImages = new Map(),
-): CreateParams => {
-  const body = {
-    input: inputOf(context.history, prompt, context.images, loaded),
-    prompt_cache_key: `grokcast-chat:${context.conversationId}`,
-    ...Option.match(settings.instructions, {
-      onNone: () => ({}),
-      onSome: (instructions) => ({ instructions }),
-    }),
-    ...Option.match(settings.reasoningEffort, {
-      onNone: () => ({}),
-      onSome: (effort) => ({ reasoning: { effort } }),
-    }),
-    ...Arr.match(toolsOf(settings.tools), {
-      onEmpty: () => ({}),
-      onNonEmpty: (tools) => ({ tools }),
-    }),
-    ...Option.match(settings.model, { onNone: () => ({}), onSome: (model) => ({ model }) }),
-  }
-  // SAFETY: the SDK's type requires `model`, but the API's `ModelRequest.model` is
-  // optional and xAI uses its default model without it. The project keeps the model
-  // unset so xAI's default and its upgrades apply.
-  return body as CreateParams
-}
+): CreateParams => ({
+  input: inputOf(context.history, prompt, context.images, loaded),
+  prompt_cache_key: `grokcast-chat:${context.conversationId}`,
+  ...Option.match(settings.instructions, {
+    onNone: () => ({}),
+    onSome: (instructions) => ({ instructions }),
+  }),
+  ...Option.match(settings.reasoningEffort, {
+    onNone: () => ({}),
+    onSome: (effort) => ({ reasoning: { effort } }),
+  }),
+  ...Arr.match(toolsOf(settings.tools), {
+    onEmpty: () => ({}),
+    onNonEmpty: (tools) => ({ tools }),
+  }),
+  model: Option.getOrElse(settings.model, () => DEFAULT_CHAT_MODEL),
+})
 
 const makeChat = Effect.fn("Chat.make")(function* () {
   const xai = yield* XaiClient

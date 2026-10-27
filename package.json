@@ -386,10 +386,10 @@
         {
           "name": "chatModel",
           "title": "Model",
-          "description": "Leave empty to use xAI's default model, which xAI keeps up to date. Enter a model ID, such as grok-4.7, only to always use that model.",
+          "description": "Leave empty to use grok-4.7. Enter another model ID from Grok Models to use that model instead.",
           "type": "textfield",
           "required": false,
-          "placeholder": "xAI default"
+          "placeholder": "grok-4.7"
         },
         {
           "name": "reasoningEffort",
