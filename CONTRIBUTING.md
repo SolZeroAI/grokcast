@@ -51,6 +51,7 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in 
 - `prompt_cache_key` is `grokcast-chat:<conversation id>`, so the turns of one conversation share xAI's prompt cache.
 - Grok's tools are `webSearch()`, `xSearch()`, and `codeExecution()` from `@xai-official/sdk/tools`. xAI runs them; the extension only shows what they did (`toolLabel`) and the URL citations.
 - A 429 is not retried, because on a subscription it usually means the usage limit. Interrupting the fiber aborts the request.
+- Image understanding goes through the same request. `ChatImages` (`src/lib/chat-images.ts`) reads JPEG, PNG, or WebP files of up to 20 MB as `Blob`s, which the SDK sends as `input_image` data URLs. A turn saves only the image paths. Images on earlier turns are sent again when their files can still be read and are skipped when they cannot. An unreadable image on the new question fails it before anything is sent.
 - `src/chat.tsx` redraws a streaming answer at most every 150 ms, because Tinycast sends the whole view on every update.
 
 ## Live speech-to-text
