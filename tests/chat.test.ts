@@ -21,7 +21,7 @@ import {
   turnMarkdown,
   type ChatProgress,
 } from "../src/lib/chat.ts"
-import { ChatImages, imageMarkdown, isSupportedImage } from "../src/lib/images.ts"
+import { ChatImages, imageMarkdown, isSupportedImage } from "../src/lib/chat-images.ts"
 import { StoredTokens } from "../src/lib/session.ts"
 import {
   fakeFetch,

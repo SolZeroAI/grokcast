@@ -13,7 +13,7 @@ import * as Layer from "effect/Layer"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
-import { ChatImages, imageMarkdown } from "./images.ts"
+import { ChatImages, imageMarkdown } from "./chat-images.ts"
 import { callXai, describeXaiError, XaiClient, XaiFailureReason } from "./xai.ts"
 
 /** How long Grok may go without sending anything while it answers. Reasoning can be quiet for a while. */

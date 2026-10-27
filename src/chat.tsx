@@ -28,7 +28,7 @@ import {
   type Conversation,
 } from "./lib/conversations.ts"
 import { GrokRuntime } from "./lib/grok.ts"
-import { imageMarkdown, isSupportedImage } from "./lib/images.ts"
+import { imageMarkdown, isSupportedImage } from "./lib/chat-images.ts"
 
 export default function GrokChat() {
   return <ChatView initial={Option.none()} nested={false} />
