@@ -13,6 +13,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Read selected text aloud                         | Done  |
 | Generate and edit images                         | Done  |
 | Generate, edit, and extend videos                | Built |
+| Grok Chat with web and X search                  | Done  |
 
 ## Microphone
 
@@ -58,6 +59,17 @@ Each new image shows in a grid. Copy or paste it, look at it with Quick Look (�
 Length, aspect ratio, and resolution start at **xAI Default**. Grokcast never picks the model, so xAI's current video model and its upgrades apply. A video usually takes a minute or two. Keep the command open while it works: the side panel shows xAI's progress. If it takes more than 10 minutes, **Check Again** looks up the same job instead of starting a new one.
 
 When the video is ready, **Open Video** plays it in your browser, and ⌘S saves the MP4 to your Downloads folder. xAI's link is temporary, so save the videos you want to keep.
+
+## Chat
+
+**Grok Chat** answers questions with Grok and keeps the conversation going. Type a question in the search bar and press Return. The answer streams into the side panel, with its sources, the model that answered, and what Grok's tools did. Ask a follow-up the same way. Press ⌘N for a new conversation and ⌘Y to see your saved conversations. Grokcast keeps the last 50 conversations on this Mac.
+
+Set these in the command preferences:
+
+- **Model**: leave empty to use xAI's default model, which xAI keeps up to date. Enter a model ID only to always use that model.
+- **Reasoning**: how hard Grok thinks before it answers. Lower is faster. Not every model accepts a setting.
+- **Grok Tools**: let Grok search the web, search X, or run Python in xAI's sandbox. Web and X search are on by default.
+- **Instructions**: text sent with every question, such as "Answer briefly".
 
 ## How sign-in works
 
