@@ -6,6 +6,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient"
 import * as TestClock from "effect/testing/TestClock"
 import { ClientId, OAuthEndpoints, XaiEndpoints } from "../src/lib/oauth.ts"
 import { GrokSession, TokenStore, type FetchFn, type StoredTokens } from "../src/lib/session.ts"
+import { XaiClient } from "../src/lib/xai.ts"
 
 /** The fixed "now" every test starts at. */
 export const NOW = 1_800_000_000_000
@@ -83,9 +84,13 @@ const memoryStoreLayer = (store: MemoryStore) =>
     }),
   )
 
-/** The session and its dependencies, with a fake `fetch`, an in-memory store and a test clock at `NOW`. */
+/**
+ * The session, the xAI SDK client, and their dependencies, with a fake `fetch`, an
+ * in-memory store and a test clock at `NOW`.
+ */
 export const testLayer = (fetch: FakeFetch, store: MemoryStore = memoryStore()) =>
-  GrokSession.layer.pipe(
+  XaiClient.layer.pipe(
+    Layer.provideMerge(GrokSession.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(XaiEndpoints, XaiEndpoints.of({ get: Effect.succeed(endpoints) })),

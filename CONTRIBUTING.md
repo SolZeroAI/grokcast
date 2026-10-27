@@ -35,10 +35,10 @@ Try each user-facing change in Raycast and in Tinycast before you merge it. Tiny
 
 ## xAI SDK
 
-Requests to xAI go through `@xai-official/sdk` (pinned exactly). `Transcriber` in `src/lib/transcriber.ts` creates the `SpaceXAI` client on first use:
+Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in `src/lib/xai.ts` creates one `SpaceXAI` client on first use, and every feature shares it. `describeXaiError` turns an SDK failure into a reason and a message for the user, in the words of the feature that failed:
 
 - The SDK will not start without an API key, so it gets a placeholder. `GrokSession.fetch` replaces the authorization header with the user's OAuth token on every request. Never pass a real API key.
-- Tinycast reports Node 22.0.0 (and sets `process.versions.tinycast`), which fails the SDK's Node 22.13 check. In Tinycast only, `Transcriber` raises the reported version while the constructor runs, then puts it back.
+- Tinycast reports Node 22.0.0 (and sets `process.versions.tinycast`), which fails the SDK's Node 22.13 check. In Tinycast only, `XaiClient` raises the reported version while the constructor runs, then puts it back.
 - Tinycast's `Request` has no `clone()`, so `GrokSession.fetch` copies a request with `new Request(request)` there. Tinycast can send the same body twice; Node cannot, so Node still uses `clone()`.
 - Speech-to-text sends raw PCM (`audio_format: "pcm"`, `sample_rate: 16000`) as one multipart request. A 429 is not retried, because on a subscription it usually means the usage limit.
 
