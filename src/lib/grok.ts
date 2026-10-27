@@ -49,6 +49,7 @@ import {
   speedFromPreference,
 } from "./speech.ts"
 import { Transcriber } from "./transcriber.ts"
+import { ReadAloudVoice, VoiceLibrary } from "./voices.ts"
 import { VideoGenerator } from "./video.ts"
 import { XaiClient } from "./xai.ts"
 import { Chat, ChatPreferences, ChatSettings, ChatTool, ReasoningEffort } from "./chat.ts"
@@ -350,9 +351,9 @@ export const RaycastImageFiles = Layer.succeed(
 
 /**
  * Everything a command needs: xAI as the signed-in user, speech-to-text (live and
- * in one request), chat, text-to-speech and its player, image and video generation,
- * the model list and tokenizer, files at xAI, the microphone, the preferences, and the
- * saved history.
+ * in one request), chat, text-to-speech and its player, built-in and custom voices,
+ * image and video generation, the model list and tokenizer, files at xAI, the
+ * microphone, the preferences, the voice picked for Read Aloud, and the saved history.
  */
 export const GrokLive = Layer.mergeAll(
   Layer.mergeAll(
@@ -360,6 +361,7 @@ export const GrokLive = Layer.mergeAll(
     LiveTranscriber.layer,
     Chat.layer,
     Speaker.layer,
+    VoiceLibrary.layer,
     ImageGenerator.layer,
     VideoGenerator.layer,
     ModelCatalog.layer,
@@ -376,7 +378,12 @@ export const GrokLive = Layer.mergeAll(
   Recorder.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(RaycastMicrophonePermission, RaycastRecorderLauncher)),
   ),
-  Layer.mergeAll(DictationHistory.layer, SpeechPlayer.layer, ImageLibrary.layer).pipe(
+  Layer.mergeAll(
+    DictationHistory.layer,
+    SpeechPlayer.layer,
+    ReadAloudVoice.layer,
+    ImageLibrary.layer,
+  ).pipe(
     Layer.provideMerge(
       Layer.mergeAll(RaycastKeyValueStore, RaycastAudioLauncher, RaycastImageFiles),
     ),

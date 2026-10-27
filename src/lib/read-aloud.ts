@@ -5,7 +5,8 @@ import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { SpeechPlayer } from "./speech-player.ts"
-import { Speaker, SpeechError, SpeechPreferences } from "./speech.ts"
+import { Speaker, SpeechError, SpeechPreferences, SpeechSettings } from "./speech.ts"
+import { ReadAloudVoice } from "./voices.ts"
 
 export type ReadAloudResult = Data.TaggedEnum<{
   /** Speech was playing, and this run stopped it. */
@@ -54,7 +55,17 @@ export const readAloud = Effect.fn("readAloud")(function* <E>(
   })
   yield* onSpeaking
   const speaker = yield* Speaker
-  const speech = yield* speaker.speak(chosen, yield* SpeechPreferences)
+  const preferences = yield* SpeechPreferences
+  // A voice picked in Grok Voices wins over the Voice preference.
+  const picked = yield* ReadAloudVoice.use((voice) => voice.get)
+  const settings = new SpeechSettings({
+    ...preferences,
+    voice: Option.orElse(
+      Option.map(picked, (voice) => voice.id),
+      () => preferences.voice,
+    ),
+  })
+  const speech = yield* speaker.speak(chosen, settings)
   yield* player.play(speech.audio)
   return ReadAloudResult.Reading({ characters: speech.characters })
 })

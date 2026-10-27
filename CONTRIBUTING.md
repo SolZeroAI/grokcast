@@ -104,6 +104,14 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - Uploads and downloads may take 5 minutes; other requests 30 seconds. None are retried.
 - `files.tsx` reads and writes files on this Mac with `node:fs/promises`, not `src/lib/`. Downloads go to `~/Downloads` with `flag: "wx"`, so an existing file is never replaced; `savedName` picks the next free name.
 
+## Voices
+
+- `VoiceLibrary` in `src/lib/voices.ts` lists `xai.voice.list()` (built-in) and `xai.voice.custom.list()` at the same time. The custom list is a `PagePromise`, read with `Stream.fromAsyncIterable` so the SDK follows `pagination_token`, up to 500 voices.
+- `create` sends the clip as a `File`, so xAI gets its file name and reads the format from it, with only the labels that are set. `update` sends every label, with `null` for an empty one, because xAI clears a label only on `null`.
+- A recording is mono 16 kHz PCM from `Recorder`. `wavOf` adds a WAV header before upload. `RecordVoice` stops at 120 seconds, xAI's limit.
+- `ReadAloudVoice` keeps the voice picked with Use for Read Aloud in LocalStorage. `readAloud` uses it instead of the Voice preference, which is a fixed dropdown and cannot list custom voices.
+- Preview uses `Speaker` and `SpeechPlayer`, the same as Read Aloud.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.
