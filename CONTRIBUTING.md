@@ -91,6 +91,12 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - `pending` (also a 202 with no body) keeps polling. `done` without a URL, or with `respect_moderation: false`, means moderation blocked the video. `failed` passes on xAI's message. `expired` means the result is gone.
 - The video URL is public and temporary. `download` fetches it with the Effect `HttpClient`, without the Grok token.
 
+## Models
+
+- `ModelCatalog` in `src/lib/models.ts` lists `xai.models.language`, `xai.models.image`, and `xai.models.video` at the same time. Only the general `xai.models.list()` gives context lengths, so it runs too, and its failure only leaves context lengths out.
+- Prices are left out of `GrokModel`: a subscription does not pay per token.
+- `ModelCatalog.tokenize` calls `xai.tokenizer.encode`. It needs a model, so Count Tokens is an action on a language model in Grok Models, not a command of its own.
+
 ## Sign-in rules
 
 - Never log or show a token. The only value that may reach the clipboard is the short device user code.

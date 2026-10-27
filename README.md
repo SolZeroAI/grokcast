@@ -15,6 +15,7 @@ Grokcast lets you use Grok in [Raycast](https://www.raycast.com) and Tinycast wi
 | Generate, edit, and extend videos                | Built |
 | Grok Chat with web and X search                  | Done  |
 | Ask Grok about images in a chat                  | Done  |
+| Grok Models and Count Tokens                     | Done  |
 
 ## Microphone
 
@@ -73,6 +74,12 @@ Set these in the command preferences:
 - **Reasoning**: how hard Grok thinks before it answers. Lower is faster. Not every model accepts a setting.
 - **Grok Tools**: let Grok search the web, search X, or run Python in xAI's sandbox. Web and X search are on by default.
 - **Instructions**: text sent with every question, such as "Answer briefly".
+
+## Models
+
+**Grok Models** lists the Grok language, image, and video models that xAI offers your account, newest first. The side panel shows each model's version, aliases, inputs and outputs, context length, and reasoning efforts. Grokcast does not show prices, because your subscription does not pay per token. Other commands do not pin a model, so xAI's default and its upgrades apply on their own.
+
+On a language model, **Count Tokens** (⌘T) shows how that model splits a text into tokens and how many there are.
 
 ## How sign-in works
 
