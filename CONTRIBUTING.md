@@ -53,6 +53,22 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - xAI drops the connection without a close frame (1006) after the last event. After `audio.done` was sent, any close ends the transcript normally. Before that, a close is a failure.
 - `dictateSpeech` records into the live session and keeps the audio. When the live session fails, gives no text, or does not finish within 10 seconds after recording stops, it sends the whole recording with `Transcriber` instead.
 
+## Read Aloud
+
+- `Speaker` in `src/lib/speech.ts` calls `xai.voice.speak` for MP3 audio. It sends `voice_id` and `speed` only when the user picks them, so xAI's defaults apply otherwise, and `language` is `auto` unless the user picks one. xAI accepts up to 60,000 characters and speeds from 0.7 to 1.5. A 429 is not retried.
+- `SpeechPlayer` in `src/lib/speech-player.ts` plays in the background and keeps the player's process ID in LocalStorage, so the next run can stop it. Before it stops a process, `AudioLauncher.isPlaying` checks that the ID still belongs to `afplay`.
+- `RaycastAudioLauncher` writes the audio to `read-aloud.mp3` in the extension's support folder and plays it with `/usr/bin/afplay`, detached so it outlives the command. Stop it with SIGTERM.
+- `read-aloud.tsx` is a no-view command. It reads its argument, then the selection, then the clipboard (`firstText`), and stops at the first with text.
+
+## Images
+
+`ImageGenerator` in `src/lib/images.ts` calls `images.generate`, or `images.edit` when there are source images:
+
+- The request leaves out `model`, so xAI uses its current image model. The SDK types `model` as required, so the body has one type assertion with a `SAFETY` comment.
+- It asks for `response_format: "b64_json"`, so the bytes arrive in the response and nothing is fetched from a second URL. A missing `mime_type` means JPEG, xAI's default.
+- One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
+- `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
+
 ## Video generation
 
 `VideoGenerator` in `src/lib/video.ts` uses the SDK's `videos.generate`, `videos.edit`, `videos.extend`, and `videos.get`:
