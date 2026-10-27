@@ -72,7 +72,7 @@ To ask about an image, attach it first: select it in Finder and press ⌘⇧F, c
 
 Set these in the command preferences:
 
-- **Model**: leave empty to use xAI's default model, which xAI keeps up to date. Enter a model ID only to always use that model.
+- **Model**: leave empty to use grok-4.7. Enter another model ID from Grok Models to use that model instead.
 - **Reasoning**: how hard Grok thinks before it answers. Lower is faster. Not every model accepts a setting.
 - **Grok Tools**: let Grok search the web, search X, or run Python in xAI's sandbox. Web and X search are on by default.
 - **Instructions**: text sent with every question, such as "Answer briefly".

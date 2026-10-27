@@ -93,6 +93,15 @@ export const describeXaiError = (error: XaiSdkError, wording: XaiFeatureWording)
         Match.when(Match.instanceOf(APIConnectionError), () =>
           failure("network", "Could not reach xAI. Check your internet connection."),
         ),
+        // xAI answers 402 when the account has no plan that covers the API, or ran out of credits.
+        Match.when(
+          (cause: unknown) => cause instanceof APIStatusError && cause.status === 402,
+          () =>
+            failure(
+              "plan",
+              "xAI says this account is out of credits or its plan does not cover this. Check your usage and plan at grok.com.",
+            ),
+        ),
         Match.when(Match.instanceOf(APIStatusError), (status) =>
           failure("failed", `${wording.failed} (status ${status.status}).`),
         ),
