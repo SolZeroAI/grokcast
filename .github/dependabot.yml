@@ -14,3 +14,6 @@ updates:
     groups:
       dependencies:
         patterns: ["*"]
+    ignore:
+      # Must match the version @raycast/api pins; bump it with @raycast/api.
+      - dependency-name: "@types/react"
