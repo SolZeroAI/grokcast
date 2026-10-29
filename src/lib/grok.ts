@@ -9,6 +9,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { environment, getPreferenceValues, LocalStorage, OAuth } from "@raycast/api"
 import * as Clock from "effect/Clock"
+import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as ManagedRuntime from "effect/ManagedRuntime"
@@ -66,8 +67,23 @@ const client = new OAuth.PKCEClient({
   description: "Sign in with your Grok or X subscription.",
 })
 
+/** How long to wait for Raycast's token store before giving up. It answers at once when Raycast is healthy. */
+const STORE_TIMEOUT = Duration.seconds(10)
+
 const storeCall = <A>(message: string, call: () => Promise<A>) =>
-  Effect.tryPromise({ try: call, catch: (cause) => new TokenStoreError({ message, cause }) })
+  Effect.tryPromise({ try: call, catch: (cause) => new TokenStoreError({ message, cause }) }).pipe(
+    // A second copy of Raycast can leave the call unanswered. Fail instead of hanging.
+    Effect.timeoutOrElse({
+      duration: STORE_TIMEOUT,
+      orElse: () =>
+        Effect.fail(
+          new TokenStoreError({
+            message: `${message} Raycast did not answer. Quit Raycast, open it again, and try again.`,
+            cause: undefined,
+          }),
+        ),
+    }),
+  )
 
 const fromRaycast = (tokens: OAuth.TokenSet): Option.Option<StoredTokens> =>
   Option.map(

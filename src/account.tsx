@@ -70,6 +70,12 @@ export default function Account(props: LaunchProps) {
         Effect.catch((error) =>
           Effect.sync(() => setState(State.Failed({ message: describe(error), retry: task }))),
         ),
+        // A defect would otherwise leave the screen on "Checking…" with no way out.
+        Effect.catchDefect(() =>
+          Effect.sync(() =>
+            setState(State.Failed({ message: "Something went wrong. Try again.", retry: task })),
+          ),
+        ),
       ),
     )
     return () => {
