@@ -450,7 +450,8 @@
           "title": "Instructions",
           "description": "Sent with every question, such as \"Answer briefly\". Leave empty for none.",
           "type": "textfield",
-          "required": false
+          "required": false,
+          "placeholder": "Answer briefly"
         }
       ]
     },
@@ -475,6 +476,9 @@
       "description": "Preview Grok's voices, make your own custom voice from a recording or an audio file, and pick the voice Read Aloud uses.",
       "mode": "view"
     }
+  ],
+  "platforms": [
+    "macOS"
   ],
   "preferences": [
     {
@@ -592,7 +596,8 @@
       "title": "OAuth Client ID",
       "description": "Leave empty to use the default xAI sign-in client. Change it only if xAI gives you a client ID for this extension.",
       "type": "textfield",
-      "required": false
+      "required": false,
+      "placeholder": "Default xAI client"
     }
   ],
   "title": "Grokcast (XAI Sub for Chat, Voice, Image, and Video)"

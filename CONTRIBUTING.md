@@ -140,4 +140,12 @@ When a pull request does not change the extension, add the `release:none` label 
 
 `.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` secrets (org-level, shared release app). It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
 
-The Raycast Store submission (`nub run publish`) is a manual step after a release. It opens a pull request on `raycast/extensions`.
+Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - YYYY-MM-DD` for the first release, then `## [x.y.z] - YYYY-MM-DD`, with one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
+
+### Raycast Store submission
+
+The maintainer submits to the Raycast Store by hand after a release. It runs on a Mac, signed in to Raycast and GitHub as `jonbeckman`.
+
+1. Take 3 to 6 screenshots with Raycast's **Capture Window** command and tick **Save to Metadata**. They go in `metadata/` as 2000 × 1250 PNGs. Use one wallpaper for all of them, one theme, and no personal data.
+2. Run `npx ray lint` and `nub run build`. `ray lint` checks `package.json` against the Store schema and checks the author name, so it needs the network.
+3. Run `nub run publish`. It opens a pull request on `raycast/extensions` with the extension in `extensions/grokcast/`. Later updates go through the same command, and `npx ray pull-contributions` brings back changes that other people made in that repository.
