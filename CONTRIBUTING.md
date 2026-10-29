@@ -6,7 +6,8 @@ Grokcast is a Raycast extension. It must also run in Tinycast. It follows the Sh
 
 - **nub `0.9.6`** is the package manager tool. `packageManager` is set to npm (`nub pm use npm`) so the lockfile is `package-lock.json`. The Raycast Store runs `npm ci`, so it needs that file. nub reads and updates it in place. Do not run `npm install` on the lockfile as well; npm and nub format it differently.
 - **Node `24.15.0`** for development and CI (`engines` is `>=24.15.0 <25`). An older Node 24 only gets a warning from npm, so `npm run dev` still works. At run time the extension uses the host's JavaScript runtime: Raycast runs Node 22, and Tinycast runs its own engine with a partial Node layer. Types are `@types/node` 22 to match the lower of the two.
-- **TypeScript `7.0.2`**. TypeScript 7 does not load `@types` packages on its own, so `tsconfig.json` lists `"types": ["node"]`.
+- **tsrs `0.20.0-ts7.1.0-beta`** (TypeScript 7.1 beta, ported to Rust) runs `nub run typecheck`, like the other SolZero repositories. **TypeScript `7.0.2`** stays installed for editors and tools that load `typescript`. TypeScript 7 does not load `@types` packages on its own, so `tsconfig.json` lists `"types": ["node"]`.
+- **`@types/react` matches the version `@raycast/api` pins** (`19.0.10` today). A second copy makes every `ReactNode` from Raycast's components fail to typecheck, so Dependabot skips it; bump it together with `@raycast/api`.
 - **Effect `4.0.5`**. Write new code in idiomatic Effect v4: namespace imports (`import * as Effect from "effect/Effect"`), services as `Context.Service` classes provided by `Layer`, errors as `Schema.TaggedError`, functions as `Effect.fn("name")`, `Option` instead of `undefined`, `Match` instead of `switch`, `Redacted` for tokens, and `effect/http` `HttpClient` for requests. Commands run programs through `GrokRuntime` (a `ManagedRuntime`); nothing else calls `Effect.run*`.
 - **Xcode 16.3 or later** (macOS only) for `ray build` and `ray develop`. They compile the Swift recorder in `recorder/` with Raycast's Swift tools ([`extensions-swift-tools`](https://github.com/raycast/extensions-swift-tools)), the same way the Raycast Store builds it. On Linux, `nub run check` stops at the build step; CI builds on a macOS runner.
 - **oxlint `1.87.0`** and **oxfmt `0.72.0`**, with `anti-slop`, `anti-slop-effect`, and `@mpsuesser/oxlint-plugin-effect` rules as warnings. The Effect rule set matches the other SolZero repositories. `.prettierrc.json` matches the oxfmt settings, because the Raycast Store checks formatting with Prettier.
@@ -28,7 +29,7 @@ Try each user-facing change in Raycast and in Tinycast before you merge it. Tiny
 
 `recorder/` is a Swift package built by `ray build` into `assets/compiled_raycast_swift/recorder` (git-ignored). No compiled binary is committed.
 
-- `microphoneAccess` and `requestMicrophoneAccess` are called through the generated `swift:` bindings. `src/swift.d.ts` declares them so `tsc` runs before a build.
+- `microphoneAccess` and `requestMicrophoneAccess` are called through the generated `swift:` bindings. `src/swift.d.ts` declares them so `tsrs` runs before a build.
 - `record` streams audio, which the bindings cannot do, so `RecorderLauncher` starts the binary as `recorder record 16000 600` and reads stdout: mono, signed 16-bit little-endian PCM at 16 kHz.
 - To stop, send SIGTERM. Do not use stdin: Tinycast closes it as soon as the process starts. The recorder also stops on SIGINT, when its parent process exits, and after the time limit (the last argument, in seconds). `Recorder` kills it if it has not exited 2 seconds after SIGTERM.
 - macOS asks for microphone access for the host app (Raycast or Tinycast), not for the recorder. `Recorder.ensureAccess` shows the prompt the first time and fails with `RecorderError` (`reason: "denied"`) when access is off.
@@ -137,6 +138,6 @@ One paragraph.
 
 When a pull request does not change the extension, add the `release:none` label and no `.tegami/` entry.
 
-`.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` secrets. It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
+`.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` secrets (org-level, shared release app). It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
 
 The Raycast Store submission (`nub run publish`) is a manual step after a release. It opens a pull request on `raycast/extensions`.
