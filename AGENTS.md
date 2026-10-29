@@ -7,7 +7,7 @@ Use Plain Language in introductory, expository, friendly, and other sensible com
 
 ## Repository
 
-This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Grokcast (Grok via Your xAI Subscription)". It uses the user's own Grok or X subscription and xAI's official TypeScript SDK, so it can offer any native Grok feature. Voice (speech-to-text and text-to-speech) comes first. It must run in Raycast and in Tinycast.
+This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Grokcast (Grok with Your xAI Subscription)". It uses the user's own Grok or X subscription and xAI's official TypeScript SDK, so it can offer any native Grok feature. Voice (speech-to-text and text-to-speech) comes first. It must run in Raycast and in Tinycast.
 
 - Use the user's xAI OAuth sign-in. Do not add an xAI API key option or a backend.
 - Keep `src/lib/` free of Raycast imports so unit tests run under plain Node.
