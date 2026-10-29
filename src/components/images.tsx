@@ -28,6 +28,7 @@ import * as Schema from "effect/Schema"
 import { useEffect, useState, type ReactNode } from "react"
 import { GrokRuntime } from "../lib/grok.ts"
 import { ImageLibrary, type ImageEntry } from "../lib/image-library.ts"
+import { nearestAspectRatio } from "../lib/image-size.ts"
 import {
   AspectRatio,
   ImageError,
@@ -68,6 +69,23 @@ const gridAspect = (ratio: Option.Option<AspectRatio>): Grid.AspectRatio =>
         Match.exhaustive,
       ),
   })
+
+/**
+ * The shape of the images Grok made, from the first image's pixel size. With xAI
+ * Default, xAI picks the shape, so the requested ratio is only the fallback.
+ */
+const resultAspect = (
+  entries: ReadonlyArray<ImageEntry>,
+  requested: Option.Option<AspectRatio>,
+): Option.Option<AspectRatio> =>
+  Option.fromNullishOr(entries[0]).pipe(
+    Option.flatMap((entry) =>
+      Option.zipWith(entry.width, entry.height, (width, height) =>
+        nearestAspectRatio({ width, height }),
+      ),
+    ),
+    Option.orElse(() => requested),
+  )
 
 const mimeTypeOf = (path: string): Option.Option<string> =>
   Match.value(extname(path).toLowerCase()).pipe(
@@ -314,7 +332,7 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
     Done: ({ entries }) => (
       <Grid
         columns={entries.length === 1 ? 1 : 2}
-        aspectRatio={gridAspect(draft.aspectRatio)}
+        aspectRatio={gridAspect(resultAspect(entries, draft.aspectRatio))}
         fit={Grid.Fit.Contain}
         searchBarPlaceholder="Filter images"
       >

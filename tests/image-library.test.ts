@@ -7,7 +7,7 @@ import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import { extensionFor, ImageFiles, ImageLibrary, MAX_IMAGES } from "../src/lib/image-library.ts"
 import { GeneratedImage, type ImageRequest } from "../src/lib/images.ts"
-import { NOW } from "./support.ts"
+import { NOW, pngHeader } from "./support.ts"
 
 /** An in-memory image folder: path to bytes. */
 const memoryFiles = () => {
@@ -90,6 +90,20 @@ describe("ImageLibrary", () => {
     assert.equal(files.files.size, 3)
     assert.ok(entries[0]?.path.endsWith(".jpg"))
     assert.deepEqual(entries[0]?.aspectRatio, Option.some("1:1"))
+  })
+
+  it("keeps the pixel size xAI chose", async () => {
+    const files = memoryFiles()
+    const [entry] = await run(
+      files,
+      ImageLibrary.use((library) =>
+        library.add(request("sky"), [
+          new GeneratedImage({ bytes: pngHeader(1280, 720), mimeType: "image/png" }),
+        ]),
+      ),
+    )
+    assert.deepEqual(entry?.width, Option.some(1280))
+    assert.deepEqual(entry?.height, Option.some(720))
   })
 
   it("deletes one image and its file", async () => {

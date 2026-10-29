@@ -82,6 +82,7 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - It asks for `response_format: "b64_json"`, so the bytes arrive in the response and nothing is fetched from a second URL. A missing `mime_type` means JPEG, xAI's default.
 - One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
 - `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
+- Each entry keeps the pixel size from the file header (`imageSize` in `src/lib/image-size.ts`). With xAI Default, xAI picks the shape, so the result grid uses the nearest grid aspect ratio to the first image instead of a square.
 
 ## Video generation
 
