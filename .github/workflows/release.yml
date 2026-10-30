@@ -18,15 +18,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Version with Tegami
+  # Picks a runner for each pool from the org ROUTACT_CONFIG (SolZeroAI/routact).
+  route:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'master' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # The route job reads runners with its own App token, so it needs no workflow token.
+    permissions: {}
+    uses: SolZeroAI/routact/.github/workflows/route.yml@master
+    with:
+      pools: light
+    secrets: inherit
+
+  release:
+    name: Version with Tegami
+    needs: route
+    runs-on: ${{ fromJson(needs.route.outputs.runners)['light'] }}
     timeout-minutes: 15
     steps:
       # The app opens tegami/version-packages, so pull_request workflows start.

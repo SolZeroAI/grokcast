@@ -11,10 +11,19 @@ permissions:
   contents: read
 
 jobs:
+  # Picks a runner for each pool from the org ROUTACT_CONFIG (SolZeroAI/routact).
+  route:
+    # The route job reads runners with its own App token, so it needs no workflow token.
+    permissions: {}
+    uses: SolZeroAI/routact/.github/workflows/route.yml@master
+    with:
+      pools: linux-arm
+    secrets: inherit
+
   preview:
     name: Build release preview
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: route
+    runs-on: ${{ fromJson(needs.route.outputs.runners)['linux-arm'] }}
     timeout-minutes: 10
     steps:
       - name: Checkout pull request

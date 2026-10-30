@@ -17,10 +17,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Picks a runner for each pool from the org ROUTACT_CONFIG (SolZeroAI/routact).
+  route:
+    # The route job reads runners with its own App token, so it needs no workflow token.
+    permissions: {}
+    uses: SolZeroAI/routact/.github/workflows/route.yml@master
+    with:
+      pools: linux-arm,xcode
+    secrets: inherit
+
   validate:
     name: Typecheck, lint, format, and test
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: route
+    runs-on: ${{ fromJson(needs.route.outputs.runners)['linux-arm'] }}
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -57,9 +66,8 @@ jobs:
   build:
     name: Build the extension and the Swift recorder
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
-    # Blacksmith's M4 runner, as in SolZeroAI/gtt-app. GitHub's macos-15 queue left this job
-    # without a runner until it was cancelled (2026-10-20).
-    runs-on: blacksmith-6vcpu-macos-26
+    needs: route
+    runs-on: ${{ fromJson(needs.route.outputs.runners)['xcode'] }}
     timeout-minutes: 20
     steps:
       - name: Checkout
