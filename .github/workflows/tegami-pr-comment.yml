@@ -13,23 +13,14 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Picks a runner for each pool from the org ROUTACT_CONFIG (SolZeroAI/routact).
-  route:
+  comment:
+    name: Post release preview
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    # The route job reads runners with its own App token, so it needs no workflow token.
-    permissions: {}
-    uses: SolZeroAI/routact/.github/workflows/route.yml@master
-    with:
-      pools: light
-    secrets: inherit
-
-  comment:
-    name: Post release preview
-    needs: route
-    runs-on: ${{ fromJson(needs.route.outputs.runners)['light'] }}
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 10
     steps:
       - name: Checkout trusted release tooling

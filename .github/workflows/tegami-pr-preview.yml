@@ -11,19 +11,10 @@ permissions:
   contents: read
 
 jobs:
-  # Picks a runner for each pool from the org ROUTACT_CONFIG (SolZeroAI/routact).
-  route:
-    # The route job reads runners with its own App token, so it needs no workflow token.
-    permissions: {}
-    uses: SolZeroAI/routact/.github/workflows/route.yml@master
-    with:
-      pools: linux-arm
-    secrets: inherit
-
   preview:
     name: Build release preview
-    needs: route
-    runs-on: ${{ fromJson(needs.route.outputs.runners)['linux-arm'] }}
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 10
     steps:
       - name: Checkout pull request
