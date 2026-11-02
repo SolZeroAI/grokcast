@@ -25,8 +25,8 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'master' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 15
     steps:
       # The app opens tegami/version-packages, so pull_request workflows start.

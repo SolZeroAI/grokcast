@@ -13,8 +13,8 @@ permissions:
 jobs:
   preview:
     name: Build release preview
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 10
     steps:
       - name: Checkout pull request
