@@ -32,7 +32,7 @@ jobs:
       # The app opens tegami/version-packages, so pull_request workflows start.
       - name: Create release app token
         id: release-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
@@ -42,7 +42,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout validated commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -50,10 +50,10 @@ jobs:
           token: ${{ steps.release-token.outputs.token }}
 
       - name: Setup nub
-        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
+        uses: nubjs/setup-nub@v0
         with:
           nub-version: "0.9.6"
-          node-version-file: .node-version
+          node-version-file: .nvmrc
           cache-dependency-path: package-lock.json
 
       - name: Install

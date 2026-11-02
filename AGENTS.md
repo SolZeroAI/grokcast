@@ -16,4 +16,5 @@ This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Gr
 - Unit tests use Node's test runner (`node --import tsx --test`). Do not add tester-army/e2e, Vitest, Jest, or Playwright.
 - Do not add ESLint or Prettier as dependencies. Lint and format are oxlint and oxfmt. `.prettierrc.json` only keeps the Raycast Store's Prettier check in agreement with oxfmt.
 - Do not print, log, or commit tokens, device codes, or recorded audio.
+- Renovate opens dependency updates with the shared `SolZeroAI/renovate-config` preset. `renovate.json` keeps `package-lock.json` on nub and holds back `@types/node` and `@types/react`. Do not add Dependabot version updates.
 - Do not submit to the Raycast Store or cut a tag. Tegami and the maintainer do that.
