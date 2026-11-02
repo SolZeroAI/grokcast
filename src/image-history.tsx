@@ -13,7 +13,7 @@ import {
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { useEffect, useState } from "react"
-import { ImageItem } from "./components/images.tsx"
+import { ImageItem, libraryAspect } from "./components/images.tsx"
 import { GrokRuntime } from "./lib/grok.ts"
 import { ImageLibrary, type ImageEntry } from "./lib/image-library.ts"
 
@@ -79,6 +79,7 @@ export default function ImageHistory() {
     <Grid
       isLoading={Option.isNone(entries)}
       columns={4}
+      aspectRatio={libraryAspect(list)}
       fit={Grid.Fit.Contain}
       searchBarPlaceholder="Search prompts"
     >
