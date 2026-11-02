@@ -20,6 +20,8 @@ import * as Option from "effect/Option"
 import { useEffect, useRef, useState } from "react"
 import { Chat, ChatPreferences, turnMarkdown, type ChatTurn } from "./lib/chat.ts"
 import { ChatConversations, newConversation, withTurn, type Conversation } from "./lib/conversations.ts"
+import { DictateAction } from "./components/dictation.tsx"
+import { appendDictation } from "./lib/dictation.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { imageMarkdown, isSupportedImage } from "./lib/chat-images.ts"
 import { signIn } from "./components/launch.tsx"
@@ -281,6 +283,7 @@ function ChatView({
 
   const commonActions = (
     <>
+      <DictateAction field="Message" onText={(text) => setSearchText((current) => appendDictation(current, text))} />
       <ActionPanel.Section title="Images">
         <Action
           title="Attach Finder Selection"

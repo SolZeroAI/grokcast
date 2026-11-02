@@ -23,6 +23,7 @@ import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
 import { useEffect, useState, type ReactNode } from "react"
+import { useDictatedFields } from "./components/dictation.tsx"
 import { GrokRuntime } from "./lib/grok.ts"
 import {
   ASPECT_RATIOS,
@@ -83,6 +84,11 @@ export default function GenerateVideo() {
   const [mode, setMode] = useState<Mode>("generate")
   const [error, setError] = useState<Option.Option<string>>(Option.none())
 
+  const dictation = useDictatedFields(
+    { prompt: { title: "Prompt", onChange: () => setError(Option.none()) } },
+    "prompt",
+  )
+
   const submit = (raw: Form.Values) => {
     const values = Schema.decodeUnknownOption(FormValues)(raw)
 
@@ -102,6 +108,7 @@ export default function GenerateVideo() {
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Make Video" icon={Icon.FilmStrip} onSubmit={submit} />
+          {dictation.action}
         </ActionPanel>
       }
     >
@@ -118,7 +125,7 @@ export default function GenerateVideo() {
         <Form.Dropdown.Item value="extend" title="Extend a Video" icon={Icon.Plus} />
       </Form.Dropdown>
       <Form.TextArea
-        id="prompt"
+        {...dictation.field("prompt")}
         title="Prompt"
         placeholder={Match.value(mode).pipe(
           Match.when("generate", () => "A red fox runs through fresh snow at dawn"),
@@ -131,7 +138,6 @@ export default function GenerateVideo() {
             : "Say what to change, or what happens next."
         }
         error={Option.getOrUndefined(error)}
-        onChange={() => setError(Option.none())}
       />
       {mode === "generate" ? (
         <Form.FilePicker

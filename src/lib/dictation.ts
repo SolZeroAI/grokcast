@@ -295,3 +295,18 @@ const minutesAndSeconds = (whole: number) => `${Math.floor(whole / 60)}:${String
 /** The language to send, from a preference value where `auto` means detect it. */
 export const languageFromPreference = (value: string): Option.Option<string> =>
   Option.filter(Option.some(value.trim()), (code) => code !== "" && code !== "auto")
+
+/**
+ * `current` with `dictated` added at the end, as a dictation shortcut in a text field
+ * adds it. A space separates the two unless `current` is empty or already ends in
+ * white space.
+ */
+export const appendDictation = (current: string, dictated: string): string =>
+  Match.value(dictated.trim()).pipe(
+    Match.when("", () => current),
+    Match.when(
+      () => current === "" || /\s$/u.test(current),
+      (text) => `${current}${text}`,
+    ),
+    Match.orElse((text) => `${current} ${text}`),
+  )

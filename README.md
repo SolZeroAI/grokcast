@@ -29,6 +29,8 @@ Grokcast records with a small Swift helper that ships inside the extension, so y
 
 When it's done, a HUD sums up the dictation, and the side panel shows the words, length, speaking speed, language, how long the text took after you stopped, and whether it came live or from the whole recording. Press ⌘Y to open **Dictation History**, which shows the same details for each dictation.
 
+To dictate into a Grokcast text field, such as a chat message, an image or video prompt, or a voice's description, press ⌘⇧D in that command. Speak, then press Return. The text goes at the end of the field you were in, or into the main field when you had not picked one. Press Esc to cancel without changing the field. Read Aloud has no text field, so it has no dictation shortcut.
+
 The live text comes from xAI's streaming speech-to-text, with your subscription. If the live connection stops, Dictate keeps recording and sends the whole recording to xAI when you stop, so you still get your text.
 
 Set these in the extension preferences:

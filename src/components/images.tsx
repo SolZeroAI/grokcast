@@ -25,6 +25,7 @@ import * as Option from "effect/Option"
 import * as Order from "effect/Order"
 import * as Schema from "effect/Schema"
 import { useEffect, useState, type ReactNode } from "react"
+import { useDictatedFields } from "./dictation.tsx"
 import { GrokRuntime } from "../lib/grok.ts"
 import { ImageLibrary, type ImageEntry } from "../lib/image-library.ts"
 import { nearestAspectRatio } from "../lib/image-size.ts"
@@ -173,6 +174,11 @@ export function ImageForm({ edit, initial }: { readonly edit: boolean; readonly 
   const [promptError, setPromptError] = useState<Option.Option<string>>(Option.none())
   const [sourcesError, setSourcesError] = useState<Option.Option<string>>(Option.none())
 
+  const dictation = useDictatedFields(
+    { prompt: { title: "Prompt", initial: initial?.prompt, onChange: () => setPromptError(Option.none()) } },
+    "prompt",
+  )
+
   const submit = (values: Form.Values) => {
     const draft = draftOf(values)
 
@@ -218,6 +224,7 @@ export function ImageForm({ edit, initial }: { readonly edit: boolean; readonly 
             icon={edit ? Icon.Pencil : Icon.Image}
             onSubmit={submit}
           />
+          {dictation.action}
         </ActionPanel>
       }
     >
@@ -234,12 +241,10 @@ export function ImageForm({ edit, initial }: { readonly edit: boolean; readonly 
         />
       ) : null}
       <Form.TextArea
-        id="prompt"
+        {...dictation.field("prompt")}
         title="Prompt"
         placeholder={edit ? "Make it a watercolor painting at sunset" : "A red fox reading a map in the snow"}
-        defaultValue={initial?.prompt}
         error={Option.getOrUndefined(promptError)}
-        onChange={() => setPromptError(Option.none())}
       />
       <Form.Dropdown
         id="aspectRatio"

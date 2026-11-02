@@ -23,6 +23,7 @@ import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
 import { useEffect, useRef, useState } from "react"
 import { clockOf, recordSpeech } from "./lib/dictation.ts"
+import { useDictatedFields } from "./components/dictation.tsx"
 import { GrokRuntime } from "./lib/grok.ts"
 import { levelBar } from "./lib/recorder.ts"
 import { SpeechPlayer } from "./lib/speech-player.ts"
@@ -482,6 +483,18 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
   const [nameError, setNameError] = useState<Option.Option<string>>(Option.none())
   const [fileError, setFileError] = useState<Option.Option<string>>(Option.none())
 
+  const dictation = useDictatedFields(
+    {
+      name: {
+        title: "Name",
+        initial: Option.getOrElse(initial.name, () => ""),
+        onChange: () => setNameError(Option.none()),
+      },
+      description: { title: "Description", initial: Option.getOrElse(initial.description, () => "") },
+    },
+    "description",
+  )
+
   const optionChoices = (values: ReadonlyArray<string>) => [
     <Form.Dropdown.Item key="not-set" value={NOT_SET} title="Not Set" />,
     ...values.map((value) => <Form.Dropdown.Item key={value} value={value} title={titleCase(value)} />),
@@ -591,6 +604,7 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
       actions={
         <ActionPanel>
           <Action.SubmitForm title={isEdit(mode) ? "Save Voice" : "Make Voice"} icon={Icon.Check} onSubmit={submit} />
+          {dictation.action}
         </ActionPanel>
       }
     >
@@ -607,19 +621,12 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
       ) : null}
       {isRecorded(mode) ? <Form.Description title="Audio" text={`Your recording (${clockOf(mode.seconds)})`} /> : null}
       <Form.TextField
-        id="name"
+        {...dictation.field("name")}
         title="Name"
         placeholder="My Voice"
-        defaultValue={Option.getOrElse(initial.name, () => "")}
         error={Option.getOrUndefined(nameError)}
-        onChange={() => setNameError(Option.none())}
       />
-      <Form.TextArea
-        id="description"
-        title="Description"
-        placeholder="Optional"
-        defaultValue={Option.getOrElse(initial.description, () => "")}
-      />
+      <Form.TextArea {...dictation.field("description")} title="Description" placeholder="Optional" />
       <Form.Separator />
       <Form.Dropdown id="gender" title="Gender" defaultValue={Option.getOrElse(initial.gender, () => NOT_SET)}>
         {optionChoices(VoiceGender.literals)}

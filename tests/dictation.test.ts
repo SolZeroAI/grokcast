@@ -10,6 +10,7 @@ import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import * as Stream from "effect/Stream"
 import {
+  appendDictation,
   clockOf,
   countWords,
   detailRows,
@@ -348,5 +349,25 @@ describe("dictateSpeech", () => {
     const { transcript, entries } = await silent.result
     assert.deepEqual(transcript, Option.none())
     assert.deepEqual(entries, [])
+  })
+})
+
+describe("appendDictation", () => {
+  it("fills an empty field", () => {
+    assert.equal(appendDictation("", "Hello there."), "Hello there.")
+  })
+
+  it("adds a space after existing text", () => {
+    assert.equal(appendDictation("A red fox", "in the snow"), "A red fox in the snow")
+  })
+
+  it("adds no space after a space or a line break", () => {
+    assert.equal(appendDictation("A red fox ", "in the snow"), "A red fox in the snow")
+    assert.equal(appendDictation("First line\n", "second line"), "First line\nsecond line")
+  })
+
+  it("trims the dictation and ignores one with no text", () => {
+    assert.equal(appendDictation("Keep", "  this  "), "Keep this")
+    assert.equal(appendDictation("Keep", "   "), "Keep")
   })
 })
