@@ -22,6 +22,7 @@ import {
   turnMarkdown,
   type ChatProgress,
 } from "../src/lib/chat.ts"
+import { Activity, Search, Thought, type Trail } from "../src/lib/chat-steps.ts"
 import { ChatImages, imageMarkdown, isSupportedImage } from "../src/lib/chat-images.ts"
 import { StoredTokens } from "../src/lib/session.ts"
 import { fakeFetch, json, memoryStore, NOW, testLayer, type FakeFetch, type MemoryStore } from "./support.ts"
@@ -55,6 +56,7 @@ const turn = (prompt: string, answer: string) =>
     toolsUsed: [],
     complete: true,
     images: Option.none(),
+    steps: Option.none(),
   })
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
@@ -118,24 +120,28 @@ const answerStream = () =>
 
 interface Progress extends ChatProgress {
   readonly texts: Array<string>
-  readonly tools: Array<string>
-  readonly thoughts: Array<true>
+  readonly trails: Array<Trail>
 }
 
 const progress = (): Progress => {
   const texts: Array<string> = []
-  const tools: Array<string> = []
-  const thoughts: Array<true> = []
+  const trails: Array<Trail> = []
 
   return {
     texts,
-    tools,
-    thoughts,
-    thinking: () => thoughts.push(true),
-    tool: (label) => tools.push(label),
+    trails,
+    steps: (trail) => trails.push(trail),
     text: (answer) => texts.push(answer),
   }
 }
+
+/** What Grok was doing at each update, such as "Thinking" or "Searching X". */
+const activities = (seen: Progress) =>
+  Arr.getSomes(
+    seen.trails.map((trail) =>
+      Option.map(trail.active, Activity.$match({ Thinking: () => "Thinking", Working: (working) => working.label })),
+    ),
+  )
 
 const provide = <A, E>(program: Effect.Effect<A, E, Chat>, fetch: FakeFetch, store: MemoryStore) =>
   Effect.runPromise(
@@ -227,8 +233,7 @@ describe("Chat.ask", () => {
     assert.deepEqual(answered.model, Option.some("grok-4.7"))
     assert.equal(answered.complete, true)
     assert.deepEqual(seen.texts, ["Hello ", "Hello there."])
-    assert.deepEqual(seen.tools, ["Searched the web", "Searched X"])
-    assert.equal(seen.thoughts.length, 1)
+    assert.ok(activities(seen).includes("Thinking"))
     assert.deepEqual(answered.toolsUsed, ["Searched the web", "Searched X"])
     assert.deepEqual(
       answered.citations.map((citation) => citation.url),
@@ -335,6 +340,108 @@ const pngFile = async (t: TestContext, name = "chart.png") => {
 }
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+
+describe("Chat.ask steps", () => {
+  it("keeps what Grok did in order: thinking, web searches as one step with their pages, then X", async () => {
+    const seen = progress()
+
+    const answered = await ask(
+      fakeFetch(() =>
+        sse([
+          { type: "response.created", response: { id: "r", status: "in_progress", output: [] } },
+          {
+            type: "response.output_item.added",
+            item: { type: "reasoning", id: "rs_1", summary: [] },
+          },
+          { type: "response.reasoning_summary_text.delta", delta: "Look it up." },
+          {
+            type: "response.output_item.done",
+            item: { type: "reasoning", id: "rs_1", summary: [] },
+          },
+          {
+            type: "response.output_item.added",
+            item: { type: "web_search_call", id: "ws_1", status: "in_progress" },
+          },
+          {
+            type: "response.output_item.done",
+            item: {
+              type: "web_search_call",
+              id: "ws_1",
+              status: "completed",
+              action: {
+                type: "search",
+                query: "grok news",
+                sources: [{ type: "url", url: "https://a.example.com/1" }],
+              },
+            },
+          },
+          {
+            type: "response.output_item.done",
+            item: {
+              type: "web_search_call",
+              id: "ws_2",
+              status: "completed",
+              action: { type: "open_page", url: "https://b.example.com/2" },
+            },
+          },
+          {
+            type: "response.output_item.added",
+            item: { type: "custom_tool_call", id: "x_1", call_id: "x_1", name: "x_keyword_search" },
+          },
+          {
+            type: "response.output_item.done",
+            item: {
+              type: "custom_tool_call",
+              id: "x_1",
+              call_id: "x_1",
+              name: "x_keyword_search",
+              input: '{"query":"grok","limit":5}',
+            },
+          },
+          { type: "response.output_text.delta", delta: "Hello there." },
+          { type: "response.output_item.done", item: message },
+          {
+            type: "response.completed",
+            response: { id: "r", status: "completed", model: "grok-4.7", output: [message] },
+          },
+        ]),
+      ),
+      { progress: seen },
+    )
+
+    assert.deepEqual(
+      answered.steps,
+      Option.some([
+        new Thought({ seconds: 0, text: "Look it up." }),
+        new Search({
+          tool: "web",
+          queries: ["grok news"],
+          pages: ["https://a.example.com/1", "https://b.example.com/2"],
+        }),
+        new Search({ tool: "x", queries: ["grok"], pages: [] }),
+      ]),
+    )
+    assert.deepEqual(Arr.dedupe(activities(seen)), ["Thinking", "Searching the web", "Searching X"])
+    assert.equal(Option.isNone(Arr.getUnsafe(seen.trails, seen.trails.length - 1).active), true)
+  })
+
+  it("keeps no steps when Grok answers straight away", async () => {
+    const answered = await ask(
+      fakeFetch(() =>
+        sse([
+          { type: "response.output_text.delta", delta: "Hello there." },
+          { type: "response.output_item.done", item: message },
+          {
+            type: "response.completed",
+            response: { id: "r", status: "completed", model: "grok-4.7", output: [message] },
+          },
+        ]),
+      ),
+    )
+
+    assert.deepEqual(answered.steps, Option.none())
+  })
+})
 
 describe("Chat.ask with images", () => {
   it("sends attached images with the question and keeps their paths on the turn", async (t) => {
@@ -449,9 +556,38 @@ describe("chat helpers", () => {
       [
         "**Hi**",
         "Hello!",
-        "**Sources**\n\n1. [example.com](https://www.example.com/a)\n2. [B (news)](https://b.example.org)",
+        [
+          "**Sources**",
+          "",
+          "1. ![example.com](https://www.google.com/s2/favicons?sz=32&domain=www.example.com&raycast-width=14&raycast-height=14) [example.com](https://www.example.com/a)",
+          "2. ![b.example.org](https://www.google.com/s2/favicons?sz=32&domain=b.example.org&raycast-width=14&raycast-height=14) [B (news)](https://b.example.org)",
+        ].join("\n"),
         "_grok-4.7 · 1.3 s · Searched the web · The answer stopped early_",
       ].join("\n\n"),
     )
+  })
+
+  it("shows Grok's steps above the answer, and leaves the tools out of the footer", () => {
+    const answered = new ChatTurn({
+      ...turn("Hi", "Hello!"),
+      toolsUsed: ["Searched the web"],
+      steps: Option.some([
+        new Thought({ seconds: 4.2, text: "" }),
+        new Search({ tool: "web", queries: ["hello"], pages: [] }),
+      ]),
+    })
+
+    assert.equal(
+      turnMarkdown(answered),
+      ["**Hi**", "> **Thought for 4 s**\n>\n> **Searched the web** for “hello”", "Hello!", "_grok-4.7 · 1.3 s_"].join(
+        "\n\n",
+      ),
+    )
+  })
+
+  it("reads a turn saved before steps were kept", () => {
+    const saved = Schema.encodeSync(ChatTurn)(turn("Hi", "Hello!"))
+    assert.equal("steps" in saved, false)
+    assert.deepEqual(Schema.decodeUnknownSync(ChatTurn)(saved).steps, Option.none())
   })
 })
