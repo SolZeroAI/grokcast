@@ -19,8 +19,8 @@ concurrency:
 jobs:
   validate:
     name: Typecheck, lint, format, and test
-    # Blacksmith's Linux runner, as in SolZeroAI/gtt-app.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -57,9 +57,8 @@ jobs:
   build:
     name: Build the extension and the Swift recorder
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
-    # Blacksmith's M4 runner, as in SolZeroAI/gtt-app. GitHub's macos-15 queue left this job
-    # without a runner until it was cancelled (2026-10-20).
-    runs-on: blacksmith-6vcpu-macos-26
+    # SolZeroAI's self-hosted macOS runners (mayflower), which carry Xcode.
+    runs-on: [self-hosted, arm64, macos]
     timeout-minutes: 20
     steps:
       - name: Checkout
