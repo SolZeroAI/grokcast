@@ -65,7 +65,11 @@ export default function DictationHistoryCommand() {
   const list = Option.getOrElse(entries, (): ReadonlyArray<HistoryEntry> => [])
 
   return (
-    <List isLoading={Option.isNone(entries)} isShowingDetail={list.length > 0}>
+    <List
+      isLoading={Option.isNone(entries)}
+      isShowingDetail={list.length > 0}
+      searchBarPlaceholder="Search dictations"
+    >
       <List.EmptyView
         icon={Icon.Microphone}
         title="No dictations yet"

@@ -24,7 +24,7 @@
     "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
-    "@raycast/api": "2.9.0",
+    "@raycast/api": "2.10.1",
     "@xai-official/sdk": "0.2.5",
     "effect": "4.0.6",
     "ws": "8.22.0"
@@ -33,7 +33,7 @@
     "@mpsuesser/oxlint-plugin-effect": "0.6.0",
     "@oxlint/plugins": "1.89.0",
     "@types/node": "22.20.5",
-    "@types/react": "19.0.10",
+    "@types/react": "19.3.0",
     "@types/ws": "8.18.2",
     "anti-slop": "github:dmmulroy/anti-slop",
     "oxfmt": "0.74.0",
@@ -450,7 +450,8 @@
           "title": "Instructions",
           "description": "Sent with every question, such as \"Answer briefly\". Leave empty for none.",
           "type": "textfield",
-          "required": false
+          "required": false,
+          "placeholder": "Answer briefly"
         }
       ]
     },
@@ -475,6 +476,9 @@
       "description": "Preview Grok's voices, make your own custom voice from a recording or an audio file, and pick the voice Read Aloud uses.",
       "mode": "view"
     }
+  ],
+  "platforms": [
+    "macOS"
   ],
   "preferences": [
     {
@@ -592,8 +596,9 @@
       "title": "OAuth Client ID",
       "description": "Leave empty to use the default xAI sign-in client. Change it only if xAI gives you a client ID for this extension.",
       "type": "textfield",
-      "required": false
+      "required": false,
+      "placeholder": "Default xAI client"
     }
   ],
-  "title": "Grokcast (XAI Sub for Chat, Voice, Image, and Video)"
+  "title": "Grokcast (Grok with Your xAI Subscription)"
 }

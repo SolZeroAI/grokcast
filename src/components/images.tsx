@@ -24,10 +24,12 @@ import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
+import * as Order from "effect/Order"
 import * as Schema from "effect/Schema"
 import { useEffect, useState, type ReactNode } from "react"
 import { GrokRuntime } from "../lib/grok.ts"
 import { ImageLibrary, type ImageEntry } from "../lib/image-library.ts"
+import { nearestAspectRatio } from "../lib/image-size.ts"
 import {
   AspectRatio,
   ImageError,
@@ -68,6 +70,51 @@ const gridAspect = (ratio: Option.Option<AspectRatio>): Grid.AspectRatio =>
         Match.exhaustive,
       ),
   })
+
+/**
+ * The shape of the images Grok made, from the first image's pixel size. With xAI
+ * Default, xAI picks the shape, so the requested ratio is only the fallback.
+ */
+const resultAspect = (
+  entries: ReadonlyArray<ImageEntry>,
+  requested: Option.Option<AspectRatio>,
+): Option.Option<AspectRatio> =>
+  Option.fromNullishOr(entries[0]).pipe(
+    Option.flatMap(entryAspect),
+    Option.orElse(() => requested),
+  )
+
+/** The aspect ratio of a saved image, from the pixel size it was saved with. */
+const entryAspect = (entry: ImageEntry): Option.Option<AspectRatio> =>
+  Option.zipWith(entry.width, entry.height, (width, height) =>
+    nearestAspectRatio({ width, height }),
+  )
+
+/**
+ * The cell shape for a grid of saved images: the shape most of them have. Images saved
+ * before Grokcast kept pixel sizes do not count. With none known, the cells are square.
+ */
+export const libraryAspect = (entries: ReadonlyArray<ImageEntry>): Grid.AspectRatio => {
+  const counts = Arr.reduce(
+    Arr.getSomes(Arr.map(entries, entryAspect)),
+    new Map<AspectRatio, number>(),
+    (map, ratio) => map.set(ratio, (map.get(ratio) ?? 0) + 1),
+  )
+  return gridAspect(
+    Option.map(
+      Arr.head(
+        Arr.sort(
+          Array.from(counts),
+          Order.mapInput(
+            Order.flip(Order.Number),
+            ([, count]: readonly [AspectRatio, number]) => count,
+          ),
+        ),
+      ),
+      ([ratio]) => ratio,
+    ),
+  )
+}
 
 const mimeTypeOf = (path: string): Option.Option<string> =>
   Match.value(extname(path).toLowerCase()).pipe(
@@ -314,7 +361,7 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
     Done: ({ entries }) => (
       <Grid
         columns={entries.length === 1 ? 1 : 2}
-        aspectRatio={gridAspect(draft.aspectRatio)}
+        aspectRatio={gridAspect(resultAspect(entries, draft.aspectRatio))}
         fit={Grid.Fit.Contain}
         searchBarPlaceholder="Filter images"
       >

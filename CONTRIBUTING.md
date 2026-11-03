@@ -7,7 +7,8 @@ Grokcast is a Raycast extension. It must also run in Tinycast. It follows the Sh
 - **nub `0.9.6`** is the package manager tool. `packageManager` is set to npm (`nub pm use npm`) so the lockfile is `package-lock.json`. The Raycast Store runs `npm ci`, so it needs that file. nub reads and updates it in place. Do not run `npm install` on the lockfile as well; npm and nub format it differently.
 - **Node `24.15.0`** for development and CI (`engines` is `>=24.15.0 <25`). An older Node 24 only gets a warning from npm, so `npm run dev` still works. At run time the extension uses the host's JavaScript runtime: Raycast runs Node 22, and Tinycast runs its own engine with a partial Node layer. Types are `@types/node` 22 to match the lower of the two, and Renovate keeps them on 22.
 - **tsrs `0.20.0-ts7.1.0-beta`** (TypeScript 7.1 beta, ported to Rust) runs `nub run typecheck`, like the other SolZero repositories. **TypeScript `7.0.2`** stays installed for editors and tools that load `typescript`. TypeScript 7 does not load `@types` packages on its own, so `tsconfig.json` lists `"types": ["node"]`.
-- **`@types/react` matches the version `@raycast/api` pins** (`19.0.10` today). A second copy makes every `ReactNode` from Raycast's components fail to typecheck, so Renovate skips it (`renovate.json`); bump it together with `@raycast/api`.
+- **`@types/react` matches the version `@raycast/api` pins** (`19.3.0` today). A second copy makes every `ReactNode` from Raycast's components fail to typecheck, so Renovate skips it (`renovate.json`); bump it together with `@raycast/api`.
+- **`@raycast/api` 2.10 or later.** `ray build` shares a package used by several commands in `node_modules/`. Version 2.9 bundled each Effect subpath separately, so module state such as the `Redacted` registry was duplicated, and reading saved tokens failed with "Constructor adapter can only throw schema issues". 2.10 shares one bundle per package. Do not go back below 2.10.
 - **Effect `4.0.6`**. Write new code in idiomatic Effect v4: namespace imports (`import * as Effect from "effect/Effect"`), services as `Context.Service` classes provided by `Layer`, errors as `Schema.TaggedError`, functions as `Effect.fn("name")`, `Option` instead of `undefined`, `Match` instead of `switch`, `Redacted` for tokens, and `effect/http` `HttpClient` for requests. Commands run programs through `GrokRuntime` (a `ManagedRuntime`); nothing else calls `Effect.run*`.
 - **Xcode 16.3 or later** (macOS only) for `ray build` and `ray develop`. They compile the Swift recorder in `recorder/` with Raycast's Swift tools ([`extensions-swift-tools`](https://github.com/raycast/extensions-swift-tools)), the same way the Raycast Store builds it. On Linux, `nub run check` stops at the build step; CI builds on a macOS runner.
 - **oxlint `1.89.0`** and **oxfmt `0.74.0`**, with `anti-slop`, `anti-slop-effect`, and `@mpsuesser/oxlint-plugin-effect` rules as warnings. The Effect rule set matches the other SolZero repositories. `.prettierrc.json` matches the oxfmt settings, because the Raycast Store checks formatting with Prettier.
@@ -81,6 +82,7 @@ The xAI SDK does not cover streaming speech-to-text, so `LiveTranscriber` in `sr
 - It asks for `response_format: "b64_json"`, so the bytes arrive in the response and nothing is fetched from a second URL. A missing `mime_type` means JPEG, xAI's default.
 - One source image goes in `image`, several in `images`. The SDK turns each `Blob` into a data URL. Grokcast allows 3 sources and 4 results per request.
 - `ImageLibrary` in `src/lib/image-library.ts` writes the files through `ImageFiles` (the extension's support folder in Raycast) and keeps the list in the key-value store. It keeps 200 images and deletes the files of older ones.
+- Each entry keeps the pixel size from the file header (`imageSize` in `src/lib/image-size.ts`). With xAI Default, xAI picks the shape, so the result grid uses the nearest grid aspect ratio to the first image instead of a square.
 
 ## Video generation
 
@@ -140,4 +142,12 @@ When a pull request does not change the extension, add the `release:none` label 
 
 `.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` secrets (org-level, shared release app). It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
 
-The Raycast Store submission (`nub run publish`) is a manual step after a release. It opens a pull request on `raycast/extensions`.
+Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - YYYY-MM-DD` for the first release, then `## [x.y.z] - YYYY-MM-DD`, with one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
+
+### Raycast Store submission
+
+The maintainer submits to the Raycast Store by hand after a release. It runs on a Mac, signed in to Raycast and GitHub as `jonbeckman`.
+
+1. Take 3 to 6 screenshots with Raycast's **Capture Window** command and tick **Save to Metadata**. They go in `metadata/` as 2000 × 1250 PNGs. Use one wallpaper for all of them, one theme, and no personal data.
+2. Run `npx ray lint` and `nub run build`. `ray lint` checks `package.json` against the Store schema and checks the author name, so it needs the network.
+3. Run `nub run publish`. It opens a pull request on `raycast/extensions` with the extension in `extensions/grokcast/`. Later updates go through the same command, and `npx ray pull-contributions` brings back changes that other people made in that repository.

@@ -70,6 +70,18 @@ export default function Account(props: LaunchProps) {
         Effect.catch((error) =>
           Effect.sync(() => setState(State.Failed({ message: describe(error), retry: task }))),
         ),
+        // A defect would otherwise leave the screen on "Checking…" with no way out.
+        Effect.catchDefect((defect) =>
+          Effect.sync(() => {
+            console.error("Grok Account failed", defect)
+            setState(
+              State.Failed({
+                message: `Something went wrong: ${String(defect)}`,
+                retry: task,
+              }),
+            )
+          }),
+        ),
       ),
     )
     return () => {
