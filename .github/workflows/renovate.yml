@@ -24,3 +24,5 @@ jobs:
   renovate:
     uses: SolZeroAI/renovate-config/.github/workflows/renovate.yml@master
     secrets: inherit
+    with:
+      runs-on: '["self-hosted","arm64","linux"]'
