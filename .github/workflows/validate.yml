@@ -2,6 +2,11 @@ name: Validate
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     branches:
       - master
   push:
@@ -19,20 +24,21 @@ concurrency:
 jobs:
   validate:
     name: Typecheck, lint, format, and test
+    if: github.event.pull_request.draft != true
     # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
     runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup nub
-        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
+        uses: nubjs/setup-nub@v0
         with:
           nub-version: "0.9.6"
-          node-version-file: .node-version
+          node-version-file: .nvmrc
           cache-dependency-path: package-lock.json
 
       - name: Install
@@ -56,21 +62,22 @@ jobs:
 
   build:
     name: Build the extension and the Swift recorder
+    if: github.event.pull_request.draft != true
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
     # SolZeroAI's self-hosted macOS runners (mayflower), which carry Xcode.
     runs-on: [self-hosted, arm64, macos]
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup nub
-        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
+        uses: nubjs/setup-nub@v0
         with:
           nub-version: "0.9.6"
-          node-version-file: .node-version
+          node-version-file: .nvmrc
           cache-dependency-path: package-lock.json
 
       - name: Install
