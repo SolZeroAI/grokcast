@@ -18,3 +18,4 @@ This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Gr
 - Do not print, log, or commit tokens, device codes, or recorded audio.
 - Renovate opens dependency updates with the shared `SolZeroAI/renovate-config` preset. `renovate.json` keeps `package-lock.json` on nub and holds back `@types/node` and `@types/react`. Do not add Dependabot version updates.
 - Do not submit to the Raycast Store or cut a tag. Tegami and the maintainer do that.
+- `nub install` installs a lefthook pre-push hook (`lefthook.yml`) that runs `nub run typecheck`, `nub run lint`, and `nub run format`. CI builds the extension on macOS only when a pull request changes `src/`, `recorder/`, `assets/`, the package files, `tsconfig.json`, `.nvmrc` or `validate.yml`.

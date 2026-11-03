@@ -60,9 +60,42 @@ jobs:
       - name: Validate the Raycast manifest
         run: npx ray lint --non-interactive
 
+  changes:
+    name: Detect build changes
+    if: github.event.pull_request.draft != true
+    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
+    runs-on: [self-hosted, arm64, linux]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.build.outputs.build }}
+    steps:
+      # A pull request runs the macOS build only when it changes a file `ray build` reads.
+      # Pushes to master and manual runs always build. The macOS pool has two VMs, shared
+      # with other repositories.
+      - name: Check changed files
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          build=true
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
+            if ! printf '%s\n' "$files" | grep -qE '^(src/|recorder/|assets/|package\.json$|package-lock\.json$|tsconfig\.json$|\.nvmrc$|\.github/workflows/validate\.yml$)'; then
+              build=false
+              echo "No build inputs changed, so the macOS build does not run."
+            fi
+          fi
+          echo "build=${build}" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build the extension and the Swift recorder
-    if: github.event.pull_request.draft != true
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
     # SolZeroAI's self-hosted macOS runners (mayflower), which carry Xcode.
     runs-on: [self-hosted, arm64, macos]

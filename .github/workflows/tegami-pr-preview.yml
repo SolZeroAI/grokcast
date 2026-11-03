@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# A new push replaces the preview, so it cancels the older run.
+concurrency:
+  group: tegami-pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   preview:
     name: Build release preview
