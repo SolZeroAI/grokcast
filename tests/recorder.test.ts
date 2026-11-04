@@ -30,6 +30,7 @@ interface Setup {
 function setup({ access = "authorized", grant = true, recorder = new FakeRecorder() }: Setup) {
   const started: Array<ReadonlyArray<string>> = []
   const calls = { requested: 0, started }
+
   const layer = Recorder.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
@@ -39,6 +40,7 @@ function setup({ access = "authorized", grant = true, recorder = new FakeRecorde
             status: Effect.succeed(access),
             request: Effect.sync(() => {
               calls.requested += 1
+
               return grant
             }),
           }),
@@ -48,6 +50,7 @@ function setup({ access = "authorized", grant = true, recorder = new FakeRecorde
           RecorderLauncher.of({
             start: (args, events) => {
               started.push(args)
+
               return recorder.start(events)
             },
           }),
@@ -56,14 +59,16 @@ function setup({ access = "authorized", grant = true, recorder = new FakeRecorde
     ),
     Layer.provideMerge(TestClock.layer()),
   )
+
   const run = <A, E>(program: Effect.Effect<A, E, Recorder | TestClock.TestClock>) =>
     Effect.runPromise(Effect.provide(program, layer))
+
   return { calls, recorder, run }
 }
 
 const record = Recorder.use((recorder) => Effect.succeed(recorder.record))
-const collect = (take: number) =>
-  Effect.flatMap(record, (audio) => Stream.runCollect(Stream.take(audio, take)))
+
+const collect = (take: number) => Effect.flatMap(record, (audio) => Stream.runCollect(Stream.take(audio, take)))
 
 describe("Recorder.record", () => {
   it("starts the recorder at 16 kHz with a time limit, streams its audio, and stops it when done", async () => {
@@ -79,10 +84,13 @@ describe("Recorder.record", () => {
   it("streams whole samples when the host splits the output at odd byte counts, as Tinycast does", async () => {
     const bytes = new Uint8Array(1365 + 3 + 1 + 4096 + 1).map((_, index) => index % 251)
     const splits = [1365, 3, 1, 4096, 1]
+
     const pieces = splits.map((size, index) => {
       const start = splits.slice(0, index).reduce((sum, value) => sum + value, 0)
+
       return bytes.subarray(start, start + size)
     })
+
     const recorder = new FakeRecorder().speak(...pieces).exitWith(RecorderExit.Finished())
     const { run } = setup({ recorder })
     const collected = await run(collect(10))
@@ -104,6 +112,7 @@ describe("Recorder.record", () => {
       access: "notDetermined",
       recorder: new FakeRecorder().speak(chunk(1)),
     })
+
     await run(collect(1))
     assert.equal(calls.requested, 1)
     assert.equal(calls.started.length, 1)
@@ -126,9 +135,8 @@ describe("Recorder.record", () => {
   })
 
   it("reports what the recorder printed when it fails", async () => {
-    const recorder = new FakeRecorder().exitWith(
-      exitFromCode(Option.some(1), "No microphone is available.\n"),
-    )
+    const recorder = new FakeRecorder().exitWith(exitFromCode(Option.some(1), "No microphone is available.\n"))
+
     const { run } = setup({ recorder })
     const error = await run(Effect.flip(collect(1)))
     assert.equal(error.reason, "failed")

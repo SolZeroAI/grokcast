@@ -8,15 +8,7 @@ import * as Redacted from "effect/Redacted"
 import * as TestClock from "effect/testing/TestClock"
 import { StoredTokens } from "../src/lib/session.ts"
 import { Transcriber, type TranscribeOptions } from "../src/lib/transcriber.ts"
-import {
-  fakeFetch,
-  json,
-  memoryStore,
-  NOW,
-  testLayer,
-  type FakeFetch,
-  type MemoryStore,
-} from "./support.ts"
+import { fakeFetch, json, memoryStore, NOW, testLayer, type FakeFetch, type MemoryStore } from "./support.ts"
 
 const signedIn = () =>
   memoryStore(
@@ -43,17 +35,11 @@ const transcribe = (
     ),
   )
 
-const transcribeError = (
-  fetch: FakeFetch,
-  store: MemoryStore = signedIn(),
-  options: TranscribeOptions = english,
-) =>
+const transcribeError = (fetch: FakeFetch, store: MemoryStore = signedIn(), options: TranscribeOptions = english) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(
-        Effect.flip(
-          Transcriber.use((transcriber) => transcriber.transcribe(new Uint8Array([1]), options)),
-        ),
+        Effect.flip(Transcriber.use((transcriber) => transcriber.transcribe(new Uint8Array([1]), options))),
       ),
       Effect.provide(Transcriber.layer.pipe(Layer.provideMerge(testLayer(fetch, store)))),
     ),
@@ -63,12 +49,12 @@ const transcribeError = (
 const fieldsOf = async (fetch: FakeFetch, index = 0) => {
   const request = fetch.requests[index]
   assert.ok(request, `no request ${index}`)
+
   const form = await new Response(request.body, {
     headers: { "content-type": request.headers.get("content-type") ?? "" },
   }).formData()
-  return Object.fromEntries(
-    [...form.entries()].filter((entry): entry is [string, string] => P.isString(entry[1])),
-  )
+
+  return Object.fromEntries([...form.entries()].filter((entry): entry is [string, string] => P.isString(entry[1])))
 }
 
 const sttResponse = () => json({ text: "  Hello there.  ", language: "en", duration: 1.5 })
@@ -114,6 +100,7 @@ describe("Transcriber.transcribe", () => {
         ? json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 })
         : json({ error: "unauthorized" }, 401),
     )
+
     const error = await transcribeError(fetch)
     assert.equal(error.reason, "signIn")
   })
@@ -132,6 +119,7 @@ describe("Transcriber.transcribe", () => {
       requests: [],
       fetch: () => Promise.reject(new TypeError("fetch failed")),
     }
+
     const error = await transcribeError(fetch)
     assert.equal(error.reason, "network")
   })

@@ -11,7 +11,7 @@ Grokcast is a Raycast extension. It must also run in Tinycast. It follows the Sh
 - **`@raycast/api` 2.10 or later.** `ray build` shares a package used by several commands in `node_modules/`. Version 2.9 bundled each Effect subpath separately, so module state such as the `Redacted` registry was duplicated, and reading saved tokens failed with "Constructor adapter can only throw schema issues". 2.10 shares one bundle per package. Do not go back below 2.10.
 - **Effect `4.0.6`**. Write new code in idiomatic Effect v4: namespace imports (`import * as Effect from "effect/Effect"`), services as `Context.Service` classes provided by `Layer`, errors as `Schema.TaggedError`, functions as `Effect.fn("name")`, `Option` instead of `undefined`, `Match` instead of `switch`, `Redacted` for tokens, and `effect/http` `HttpClient` for requests. Commands run programs through `GrokRuntime` (a `ManagedRuntime`); nothing else calls `Effect.run*`.
 - **Xcode 16.3 or later** (macOS only) for `ray build` and `ray develop`. They compile the Swift recorder in `recorder/` with Raycast's Swift tools ([`extensions-swift-tools`](https://github.com/raycast/extensions-swift-tools)), the same way the Raycast Store builds it. On Linux, `nub run check` stops at the build step; CI builds on a macOS runner.
-- **oxlint `1.89.0`** and **oxfmt `0.74.0`**, with `anti-slop`, `anti-slop-effect`, and `@mpsuesser/oxlint-plugin-effect` rules as warnings. The Effect rule set matches the other SolZero repositories. `.prettierrc.json` matches the oxfmt settings, because the Raycast Store checks formatting with Prettier.
+- **oxlint `1.89.0`** and **oxfmt `0.74.0`**. `oxlint.config.ts` uses the shared SolZero setup from [`oxlint-plugin-solzero`](https://github.com/SolZeroAI/oxlint-plugin-solzero): `recommended` (anti-slop and anti-slop-effect) everywhere, and `effectRules()` on `src/lib/`. The views in `src/*.tsx` bridge Effect to React, so the Effect composition rules do not check them. `nub run lint` runs `oxlint --deny-warnings`, so every rule is an error. oxfmt prints 120 columns, and `.prettierrc.json` matches its settings, because the Raycast Store checks formatting with Prettier.
 
 ```sh
 nub install --frozen-lockfile
@@ -48,7 +48,7 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in 
 
 `Chat` in `src/lib/chat.ts` streams answers from the Responses API (`client.responses.create` with `stream: true`) through `XaiClient`. `ChatConversations` in `src/lib/conversations.ts` keeps saved conversations in the `KeyValueStore`.
 
-- The request leaves out `model` unless the user sets one in the command preferences, so xAI's default model and its upgrades apply. The SDK's type requires `model`, but the API does not; `requestOf` has the one type assertion.
+- The request sends the model from the command preferences, or `DEFAULT_CHAT_MODEL` (`grok-4.7`) when that is empty.
 - `store` stays `false` (the SDK default). Each new question resends the earlier turns as plain user and assistant messages, so a saved conversation continues the same way. Reasoning state is not carried between turns.
 - `prompt_cache_key` is `grokcast-chat:<conversation id>`, so the turns of one conversation share xAI's prompt cache.
 - Grok's tools are `webSearch()`, `xSearch()`, and `codeExecution()` from `@xai-official/sdk/tools`. xAI runs them; the extension only shows what they did (`toolLabel`) and the URL citations.
@@ -142,12 +142,16 @@ When a pull request does not change the extension, add the `release:none` label 
 
 `.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` secrets (org-level, shared release app). It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
 
-Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - YYYY-MM-DD` for the first release, then `## [x.y.z] - YYYY-MM-DD`, with one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
+Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - {PR_MERGE_DATE}` for the first release, then `## [x.y.z] - {PR_MERGE_DATE}`. Raycast replaces `{PR_MERGE_DATE}` with the date it merges the Store pull request. Each entry has one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
 
 ### Raycast Store submission
 
 The maintainer submits to the Raycast Store by hand after a release. It runs on a Mac, signed in to Raycast and GitHub as `jonbeckman`.
 
 1. Take 3 to 6 screenshots with Raycast's **Capture Window** command and tick **Save to Metadata**. They go in `metadata/` as 2000 × 1250 PNGs. Use one wallpaper for all of them, one theme, and no personal data.
-2. Run `npx ray lint` and `nub run build`. `ray lint` checks `package.json` against the Store schema and checks the author name, so it needs the network.
-3. Run `nub run publish`. It opens a pull request on `raycast/extensions` with the extension in `extensions/grokcast/`. Later updates go through the same command, and `npx ray pull-contributions` brings back changes that other people made in that repository.
+2. Run `nub run store:check`. It builds the staging folder `.store/grokcast` (git-ignored), runs `ray build` and `ray lint` there, and lists the files the Store gets. `ray lint` checks `package.json` against the Store schema and checks the author name, so it needs the network.
+3. Run `nub run publish`. It builds the staging folder again and runs `ray publish` there, which opens or updates the pull request on `raycast/extensions` with the extension in `extensions/grokcast/`. Sign in to GitHub in the browser when it asks.
+
+`ray publish` copies the whole folder it runs in, except `.git`, `.github`, `node_modules`, and Swift build folders, and it reads no ignore file. So `scripts/store-publish.mts` copies only `src/`, `assets/`, `metadata/`, `recorder/`, `package-lock.json`, `README.md`, `CHANGELOG.md`, `tsconfig.json`, `.prettierrc.json`, and `.gitignore`. It writes `package.json` without `version` (Tegami owns it here, and the Store does not want one) and with Raycast's standard scripts. Agent files, this guide, tests, scripts, and release config stay in this repository. Add a file to `STORE_FILES` when the extension starts to use it. CI runs `nub run store:check` on macOS after the build.
+
+The staging folder is its own git repository with one commit. After Raycast merges a version, `ray publish` copies the Store's folder over it to look for edits that other people made. When it reports some, run `npx @raycast/api@latest pull-contributions` in this repository. It writes the Store's files over these, including the Store `package.json`, so put back `version` and this repository's scripts before you commit. Then publish again.

@@ -6,12 +6,7 @@ import * as Option from "effect/Option"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import { ChatTurn } from "../src/lib/chat.ts"
-import {
-  ChatConversations,
-  MAX_CONVERSATIONS,
-  newConversation,
-  withTurn,
-} from "../src/lib/conversations.ts"
+import { ChatConversations, MAX_CONVERSATIONS, newConversation, withTurn } from "../src/lib/conversations.ts"
 import { NOW } from "./support.ts"
 
 const run = <A, E>(program: Effect.Effect<A, E, ChatConversations | KeyValueStore.KeyValueStore>) =>
@@ -57,11 +52,10 @@ describe("ChatConversations", () => {
   it("names a conversation after its first question and keeps later turns in order", async () => {
     const conversation = await run(
       newConversation.pipe(
-        Effect.map((empty) =>
-          withTurn(withTurn(empty, turnAt(NOW, "First?")), turnAt(NOW + 5000, "Second?")),
-        ),
+        Effect.map((empty) => withTurn(withTurn(empty, turnAt(NOW, "First?")), turnAt(NOW + 5000, "Second?"))),
       ),
     )
+
     assert.equal(conversation.title, "First?")
     assert.deepEqual(
       conversation.turns.map((turn) => turn.prompt),
@@ -75,12 +69,12 @@ describe("ChatConversations", () => {
       Effect.gen(function* () {
         const first = yield* start("first")
         yield* start("second")
-        yield* ChatConversations.use((saved) =>
-          saved.save(withTurn(first, turnAt(NOW + 10, "again"))),
-        )
+        yield* ChatConversations.use((saved) => saved.save(withTurn(first, turnAt(NOW + 10, "again"))))
+
         return yield* titles
       }),
     )
+
     assert.deepEqual(listed, ["first", "second"])
   })
 
@@ -91,6 +85,7 @@ describe("ChatConversations", () => {
         Effect.andThen(titles),
       ),
     )
+
     assert.deepEqual(listed, [])
   })
 
@@ -104,6 +99,7 @@ describe("ChatConversations", () => {
         },
       ).pipe(Effect.andThen(titles)),
     )
+
     assert.equal(listed.length, MAX_CONVERSATIONS)
     assert.equal(listed[0], `c${MAX_CONVERSATIONS + 1}`)
   })
@@ -116,9 +112,11 @@ describe("ChatConversations", () => {
         yield* ChatConversations.use((saved) => saved.remove(first.id))
         const afterRemove = yield* titles
         yield* ChatConversations.use((saved) => saved.clear)
+
         return [afterRemove, yield* titles]
       }),
     )
+
     assert.deepEqual(listed, [["second"], []])
   })
 
@@ -128,6 +126,7 @@ describe("ChatConversations", () => {
         Effect.andThen(titles),
       ),
     )
+
     assert.deepEqual(listed, [])
   })
 })

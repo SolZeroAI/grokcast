@@ -85,7 +85,7 @@ jobs:
           build=true
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
-            if ! printf '%s\n' "$files" | grep -qE '^(src/|recorder/|assets/|package\.json$|package-lock\.json$|tsconfig\.json$|\.nvmrc$|\.github/workflows/validate\.yml$)'; then
+            if ! printf '%s\n' "$files" | grep -qE '^(src/|recorder/|assets/|package\.json$|package-lock\.json$|tsconfig\.json$|\.nvmrc$|scripts/store-publish\.mts$|\.github/workflows/validate\.yml$)'; then
               build=false
               echo "No build inputs changed, so the macOS build does not run."
             fi
@@ -125,3 +125,8 @@ jobs:
 
       - name: Check that the recorder was built
         run: test -x assets/compiled_raycast_swift/recorder
+
+      # Builds and lints the staging folder that `nub run publish` sends to the Store,
+      # and lists its files, so a missing or extra Store file shows up here.
+      - name: Check the Store copy
+        run: nub run store:check

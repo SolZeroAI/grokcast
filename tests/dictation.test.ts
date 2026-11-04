@@ -25,11 +25,7 @@ import {
 } from "../src/lib/dictation.ts"
 import { DictationHistory } from "../src/lib/history.ts"
 import { joinChunks } from "../src/lib/recorder.ts"
-import {
-  LiveTranscriber,
-  LiveTranscript,
-  LiveTranscriptionError,
-} from "../src/lib/live-transcriber.ts"
+import { LiveTranscriber, LiveTranscript, LiveTranscriptionError } from "../src/lib/live-transcriber.ts"
 import { Transcriber, Transcript, type TranscribeOptions } from "../src/lib/transcriber.ts"
 import { chunk, FakeRecorder, fakeRecorderLayer } from "./fake-recorder.ts"
 
@@ -44,16 +40,19 @@ const settings = (keepHistory: boolean) =>
 /** A transcriber that answers `text` and records what it was asked. */
 const fakeTranscriber = (text: string) => {
   const calls: Array<{ bytes: number; options: TranscribeOptions }> = []
+
   const layer = Layer.succeed(
     Transcriber,
     Transcriber.of({
       transcribe: (audio, options) =>
         Effect.sync(() => {
           calls.push({ bytes: audio.byteLength, options })
+
           return new Transcript({ text, seconds: 1, language: Option.some("en") })
         }),
     }),
   )
+
   return { calls, layer }
 }
 
@@ -94,6 +93,7 @@ describe("detailRows", () => {
       readySeconds: Option.some(0.42),
       live: Option.some(true),
     })
+
     assert.deepEqual(
       rows.map((row) => [row.title, row.text]),
       [
@@ -115,6 +115,7 @@ describe("detailRows", () => {
       readySeconds: Option.none(),
       live: Option.none(),
     })
+
     assert.deepEqual(
       rows.map((row) => row.title),
       ["Words", "Length"],
@@ -141,23 +142,27 @@ describe("recordSpeech", () => {
   it("records until told to stop and returns the audio with its length", async () => {
     const recorder = new FakeRecorder().speak(chunk(1, 2), chunk(3, 4))
     const levels: Array<number> = []
+
     const recording = await Effect.runPromise(
       Effect.gen(function* () {
         const stop = yield* Deferred.make<void>()
         const heard = yield* Deferred.make<void>()
+
         const fiber = yield* Effect.forkChild(
           recordSpeech(Deferred.await(stop), (seconds) => {
             levels.push(seconds)
+
             if (levels.length === 2) Deferred.doneUnsafe(heard, Effect.void)
           }),
         )
+
         yield* Deferred.await(heard)
         yield* Deferred.succeed(stop, undefined)
+
         return yield* Fiber.join(fiber)
-      }).pipe(
-        Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer()))),
-      ),
+      }).pipe(Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer())))),
     )
+
     assert.deepEqual(recording.audio, chunk(1, 2, 3, 4))
     assert.equal(recording.seconds, 8 / 32_000)
     assert.deepEqual(levels, [4 / 32_000, 8 / 32_000])
@@ -166,19 +171,20 @@ describe("recordSpeech", () => {
 
   it("stops on its own after five minutes", async () => {
     const recorder = new FakeRecorder().speak(chunk(1))
+
     const recording = await Effect.runPromise(
       Effect.gen(function* () {
         const heard = yield* Deferred.make<void>()
-        const fiber = yield* Effect.forkChild(
-          recordSpeech(Effect.never, () => Deferred.doneUnsafe(heard, Effect.void)),
-        )
+
+        const fiber = yield* Effect.forkChild(recordSpeech(Effect.never, () => Deferred.doneUnsafe(heard, Effect.void)))
+
         yield* Deferred.await(heard)
         yield* TestClock.adjust("5 minutes")
+
         return yield* Fiber.join(fiber)
-      }).pipe(
-        Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer()))),
-      ),
+      }).pipe(Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer())))),
     )
+
     assert.deepEqual(recording.audio, chunk(1))
     assert.equal(recorder.finished, true)
   })
@@ -192,6 +198,7 @@ type LiveBehavior =
 /** A live transcriber that reads all the audio, then behaves as `behavior` says. */
 const fakeLive = (behavior: LiveBehavior) => {
   const heard = { bytes: 0 }
+
   const layer = Layer.succeed(
     LiveTranscriber,
     LiveTranscriber.of({
@@ -207,18 +214,18 @@ const fakeLive = (behavior: LiveBehavior) => {
               Match.when({ kind: "says" }, ({ text }) =>
                 Effect.sync(() => {
                   onText(text)
+
                   return new LiveTranscript({ text, language: Option.some("fr") })
                 }),
               ),
-              Match.when({ kind: "fails" }, () =>
-                Effect.fail(new LiveTranscriptionError({ message: "dropped" })),
-              ),
+              Match.when({ kind: "fails" }, () => Effect.fail(new LiveTranscriptionError({ message: "dropped" }))),
               Match.orElse(() => Effect.never),
             ),
           ),
         ),
     }),
   )
+
   return { heard, layer }
 }
 
@@ -233,12 +240,14 @@ describe("dictateSpeech", () => {
     const live = fakeLive(options.live)
     const batch = fakeTranscriber(options.batch ?? "From the recording.")
     const events: Array<string> = []
+
     const progress: DictationProgress = {
       audio: () => {},
       text: (text) => events.push(`text:${text}`),
       liveStopped: () => events.push("liveStopped"),
       finishing: (seconds) => events.push(`finishing:${seconds}`),
     }
+
     const layer = Layer.mergeAll(
       live.layer,
       batch.layer,
@@ -246,27 +255,34 @@ describe("dictateSpeech", () => {
       DictationHistory.layer.pipe(Layer.provideMerge(KeyValueStore.layerMemory)),
       fakeRecorderLayer(recorder),
     ).pipe(Layer.provideMerge(TestClock.layer()))
+
     const result = Effect.runPromise(
       Effect.gen(function* () {
         const stop = yield* Deferred.make<void>()
         const heard = yield* Deferred.make<void>()
+
         const fiber = yield* Effect.forkChild(
           dictateSpeech(Deferred.await(stop), {
             ...progress,
             audio: () => Deferred.doneUnsafe(heard, Effect.void),
           }),
         )
+
         yield* Deferred.await(heard)
         yield* Deferred.succeed(stop, undefined)
+
         if (options.live.kind === "hangs") {
           yield* Effect.yieldNow
           yield* TestClock.adjust(LIVE_FINISH_TIMEOUT)
         }
+
         const transcript = yield* Fiber.join(fiber)
         const entries = yield* DictationHistory.use((history) => history.list)
+
         return { transcript, entries }
       }).pipe(Effect.provide(layer)),
     )
+
     return { batch: batch.calls, live: live.heard, events, result }
   }
 
@@ -293,9 +309,7 @@ describe("dictateSpeech", () => {
       Option.map(transcript, (found) => [found.text, found.language, found.live]),
       Option.some(["From the recording.", Option.some("en"), false]),
     )
-    assert.deepEqual(batch, [
-      { bytes: 32_000, options: { language: Option.some("en"), formatNumbers: true } },
-    ])
+    assert.deepEqual(batch, [{ bytes: 32_000, options: { language: Option.some("en"), formatNumbers: true } }])
     assert.ok(events.includes("liveStopped"))
   })
 
@@ -320,6 +334,7 @@ describe("dictateSpeech", () => {
       live: { kind: "says", text: "ignored" },
       speech: [new Uint8Array(64)],
     })
+
     const { transcript, entries } = await result
     assert.deepEqual(transcript, Option.none())
     assert.deepEqual(batch, [])

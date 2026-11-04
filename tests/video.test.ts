@@ -9,6 +9,7 @@ import * as Option from "effect/Option"
 import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as TestClock from "effect/testing/TestClock"
+import * as Result from "effect/Result"
 import { StoredTokens } from "../src/lib/session.ts"
 import {
   MAX_WAIT,
@@ -43,6 +44,7 @@ const fromText = VideoRequest.Generate({
 const mp4 = { bytes: new Uint8Array([0, 0, 0, 24]), type: "video/mp4" }
 
 const Body = Schema.Record(Schema.String, Schema.Unknown)
+
 /** The JSON body of the request at `index`. */
 const bodyOf = (fetch: FakeFetch, index = 0) =>
   Schema.decodeUnknownSync(Schema.fromJsonString(Body))(
@@ -68,6 +70,7 @@ interface WireBody {
 
 const answer = (body: WireBody, status = 200) => Response.json(body, { status })
 const started = () => answer({ request_id: "req-1" })
+
 const done: WireBody = {
   status: "done",
   model: "grok-imagine-video",
@@ -78,18 +81,13 @@ const done: WireBody = {
 /** Answers the start request, then the polls in `polls` (the last one repeats). */
 const job = (polls: ReadonlyArray<() => Response>) =>
   fakeFetch((request, index) =>
-    request.method === "POST"
-      ? started()
-      : (polls[Math.min(index - 1, polls.length - 1)] ?? (() => answer(done)))(),
+    request.method === "POST" ? started() : (polls[Math.min(index - 1, polls.length - 1)] ?? (() => answer(done)))(),
   )
 
 /** Let the fake fetch's promises settle between clock steps. */
-const settle = Effect.tryPromise(() => new Promise<void>((resolve) => setImmediate(resolve))).pipe(
-  Effect.orDie,
-)
+const settle = Effect.tryPromise(() => new Promise<void>((resolve) => setImmediate(resolve))).pipe(Effect.orDie)
 
-const layer = (fetch: FakeFetch) =>
-  VideoGenerator.layer.pipe(Layer.provideMerge(testLayer(fetch, signedIn())))
+const layer = (fetch: FakeFetch) => VideoGenerator.layer.pipe(Layer.provideMerge(testLayer(fetch, signedIn())))
 
 /**
  * Run `generate` and step the test clock one poll at a time until it ends.
@@ -100,6 +98,7 @@ const generate = (fetch: FakeFetch, request: VideoRequest = fromText) =>
     Effect.gen(function* () {
       yield* TestClock.setTime(NOW)
       const reports: Array<Option.Option<number>> = []
+
       const fiber = yield* Effect.forkChild(
         Effect.result(
           VideoGenerator.use((videos) =>
@@ -107,12 +106,14 @@ const generate = (fetch: FakeFetch, request: VideoRequest = fromText) =>
           ),
         ),
       )
+
       const steps = Duration.toMillis(MAX_WAIT) / Duration.toMillis(POLL_INTERVAL) + 2
       yield* Effect.forEach(
         Array.from({ length: steps }),
         () => settle.pipe(Effect.andThen(TestClock.adjust(POLL_INTERVAL)), Effect.andThen(settle)),
         { discard: true },
       )
+
       return { result: yield* Fiber.join(fiber), reports }
     }).pipe(Effect.provide(layer(fetch))),
   )
@@ -120,7 +121,8 @@ const generate = (fetch: FakeFetch, request: VideoRequest = fromText) =>
 const errorOf = async (fetch: FakeFetch, request?: VideoRequest): Promise<VideoError> => {
   const { result } = await generate(fetch, request)
   assert.equal(result._tag, "Failure", "expected a failure")
-  return result._tag === "Failure" ? result.failure : assert.fail()
+
+  return Result.isFailure(result) ? result.failure : assert.fail()
 }
 
 describe("VideoGenerator.generate", () => {
@@ -130,9 +132,10 @@ describe("VideoGenerator.generate", () => {
       () => answer({ status: "pending", progress: 40 }),
       () => answer(done),
     ])
+
     const { result, reports } = await generate(fetch)
     assert.equal(result._tag, "Success")
-    const video = result._tag === "Success" ? result.success : assert.fail()
+    const video = Result.isSuccess(result) ? result.success : assert.fail()
     assert.equal(video.url, "https://vidgen.x.ai/req-1.mp4")
     assert.equal(video.seconds, 8)
     assert.deepEqual(video.model, Option.some("grok-imagine-video"))
@@ -176,10 +179,7 @@ describe("VideoGenerator.generate", () => {
     })
 
     const extend = job([() => answer(done)])
-    await generate(
-      extend,
-      VideoRequest.Extend({ prompt: "The cat waves", video: mp4, duration: Option.some(4) }),
-    )
+    await generate(extend, VideoRequest.Extend({ prompt: "The cat waves", video: mp4, duration: Option.some(4) }))
     assert.equal(extend.requests[0]?.url, "https://api.x.ai/v1/videos/extensions")
     assert.deepEqual(bodyOf(extend), {
       prompt: "The cat waves",
@@ -198,6 +198,7 @@ describe("VideoGenerator.generate", () => {
           }),
       ]),
     )
+
     assert.equal(error.reason, "failed")
     assert.match(error.message, /The image is too small\./)
     assert.ok(Option.isNone(error.requestId))
@@ -213,6 +214,7 @@ describe("VideoGenerator.generate", () => {
           }),
       ]),
     )
+
     assert.match(error.message, /moderation/)
   })
 
@@ -224,6 +226,12 @@ describe("VideoGenerator.generate", () => {
   it("stops waiting after MAX_WAIT and keeps the request ID to check again", async () => {
     const error = await errorOf(job([() => answer({ status: "pending", progress: 10 })]))
     assert.equal(error.reason, "network")
+    assert.deepEqual(error.requestId, Option.some("req-1"))
+  })
+
+  it("keeps the request ID when a status check fails, so the user can check again", async () => {
+    const error = await errorOf(job([() => answer({ error: "unavailable" }, 503)]))
+
     assert.deepEqual(error.requestId, Option.some("req-1"))
   })
 
@@ -239,12 +247,14 @@ describe("VideoGenerator.generate", () => {
 
   it("asks the user to sign in when nobody is signed in, without calling xAI", async () => {
     const fetch = job([() => answer(done)])
+
     const error = await Effect.runPromise(
       TestClock.setTime(NOW).pipe(
         Effect.andThen(Effect.flip(VideoGenerator.use((videos) => videos.start(fromText)))),
         Effect.provide(VideoGenerator.layer.pipe(Layer.provideMerge(testLayer(fetch)))),
       ),
     )
+
     assert.equal(error.reason, "signIn")
     assert.equal(fetch.requests.length, 0)
   })
@@ -253,13 +263,13 @@ describe("VideoGenerator.generate", () => {
 describe("VideoGenerator.download", () => {
   it("downloads the MP4 without sending the Grok token", async () => {
     const fetch = fakeFetch(() => new Response(new Uint8Array([7, 8, 9])))
+
     const bytes = await Effect.runPromise(
       VideoGenerator.use((videos) =>
-        videos.download(
-          new Video({ url: "https://vidgen.x.ai/req-1.mp4", seconds: 8, model: Option.none() }),
-        ),
+        videos.download(new Video({ url: "https://vidgen.x.ai/req-1.mp4", seconds: 8, model: Option.none() })),
       ).pipe(Effect.provide(layer(fetch))),
     )
+
     assert.deepEqual([...bytes], [7, 8, 9])
     const last = fetch.requests.at(-1)
     assert.equal(last?.url, "https://vidgen.x.ai/req-1.mp4")

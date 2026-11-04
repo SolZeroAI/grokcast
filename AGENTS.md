@@ -11,11 +11,11 @@ This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Gr
 
 - Use the user's xAI OAuth sign-in. Do not add an xAI API key option or a backend.
 - Keep `src/lib/` free of Raycast imports so unit tests run under plain Node.
-- Write code in idiomatic Effect v4. CONTRIBUTING.md lists the conventions. Fix Effect lint warnings in `src/` and `tests/` instead of disabling them.
+- Write code in idiomatic Effect v4. CONTRIBUTING.md lists the conventions. Lint uses `oxlint-plugin-solzero`. Fix lint errors instead of disabling them.
 - Do not add Alchemy, Cloudflare Workers, TanStack Start, Clerk, PlanetScale, drizzle, or turbo.
 - Unit tests use Node's test runner (`node --import tsx --test`). Do not add tester-army/e2e, Vitest, Jest, or Playwright.
 - Do not add ESLint or Prettier as dependencies. Lint and format are oxlint and oxfmt. `.prettierrc.json` only keeps the Raycast Store's Prettier check in agreement with oxfmt.
 - Do not print, log, or commit tokens, device codes, or recorded audio.
 - Renovate opens dependency updates with the shared `SolZeroAI/renovate-config` preset. `renovate.json` keeps `package-lock.json` on nub and holds back `@types/node` and `@types/react`. Do not add Dependabot version updates.
 - Do not submit to the Raycast Store or cut a tag. Tegami and the maintainer do that.
-- `nub install` installs a lefthook pre-push hook (`lefthook.yml`) that runs `nub run typecheck`, `nub run lint`, and `nub run format`. CI builds the extension on macOS only when a pull request changes `src/`, `recorder/`, `assets/`, the package files, `tsconfig.json`, `.nvmrc` or `validate.yml`.
+- `nub install` installs a lefthook pre-push hook (`lefthook.yml`) that runs `nub run typecheck`, `nub run lint`, and `nub run format`. CI builds the extension on macOS, then runs `nub run store:check`, only when a pull request changes `src/`, `recorder/`, `assets/`, the package files, `tsconfig.json`, `.nvmrc`, `scripts/store-publish.mts` or `validate.yml`.

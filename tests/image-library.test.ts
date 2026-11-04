@@ -12,6 +12,7 @@ import { NOW, pngHeader } from "./support.ts"
 /** An in-memory image folder: path to bytes. */
 const memoryFiles = () => {
   const files = new Map<string, Uint8Array>()
+
   const layer = Layer.succeed(
     ImageFiles,
     ImageFiles.of({
@@ -19,6 +20,7 @@ const memoryFiles = () => {
         Effect.sync(() => {
           const path = `/images/${name}`
           files.set(path, bytes)
+
           return path
         }),
       remove: (path) =>
@@ -27,13 +29,11 @@ const memoryFiles = () => {
         }),
     }),
   )
+
   return { files, layer }
 }
 
-const run = <A, E>(
-  files: ReturnType<typeof memoryFiles>,
-  program: Effect.Effect<A, E, ImageLibrary>,
-) =>
+const run = <A, E>(files: ReturnType<typeof memoryFiles>, program: Effect.Effect<A, E, ImageLibrary>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(program),
@@ -54,8 +54,7 @@ const request = (prompt: string): ImageRequest => ({
   sources: [],
 })
 
-const image = (mimeType = "image/jpeg") =>
-  new GeneratedImage({ bytes: new Uint8Array([1, 2, 3]), mimeType })
+const image = (mimeType = "image/jpeg") => new GeneratedImage({ bytes: new Uint8Array([1, 2, 3]), mimeType })
 
 /** Add images one millisecond after the previous ones. */
 const add = (prompt: string, count = 1) =>
@@ -77,14 +76,17 @@ const prompts = ImageLibrary.use((library) => library.list).pipe(
 describe("ImageLibrary", () => {
   it("saves each image as a file and lists the newest first", async () => {
     const files = memoryFiles()
+
     const [entries, listed] = await run(
       files,
       Effect.gen(function* () {
         yield* add("first")
         const added = yield* add("second", 2)
+
         return [added, yield* prompts] as const
       }),
     )
+
     assert.equal(entries.length, 2)
     assert.deepEqual(listed, ["second", "second", "first"])
     assert.equal(files.files.size, 3)
@@ -94,57 +96,66 @@ describe("ImageLibrary", () => {
 
   it("keeps the pixel size xAI chose", async () => {
     const files = memoryFiles()
+
     const [entry] = await run(
       files,
       ImageLibrary.use((library) =>
-        library.add(request("sky"), [
-          new GeneratedImage({ bytes: pngHeader(1280, 720), mimeType: "image/png" }),
-        ]),
+        library.add(request("sky"), [new GeneratedImage({ bytes: pngHeader(1280, 720), mimeType: "image/png" })]),
       ),
     )
+
     assert.deepEqual(entry?.width, Option.some(1280))
     assert.deepEqual(entry?.height, Option.some(720))
   })
 
   it("deletes one image and its file", async () => {
     const files = memoryFiles()
+
     const listed = await run(
       files,
       Effect.gen(function* () {
         const [first] = yield* add("first")
         yield* add("second")
         yield* ImageLibrary.use((library) => library.remove(first?.id ?? ""))
+
         return yield* prompts
       }),
     )
+
     assert.deepEqual(listed, ["second"])
     assert.equal(files.files.size, 1)
   })
 
   it("deletes everything", async () => {
     const files = memoryFiles()
+
     const listed = await run(
       files,
       Effect.gen(function* () {
         yield* add("first", 2)
         yield* ImageLibrary.use((library) => library.clear)
+
         return yield* prompts
       }),
     )
+
     assert.deepEqual(listed, [])
     assert.equal(files.files.size, 0)
   })
 
   it(`keeps the newest ${MAX_IMAGES} images and deletes the files of older ones`, async () => {
     const files = memoryFiles()
+
     const listed = await run(
       files,
       Effect.gen(function* () {
         yield* add("old", 2)
         yield* add("new", MAX_IMAGES - 1)
+
         return yield* prompts
       }),
     )
+
     assert.equal(listed.length, MAX_IMAGES)
     assert.equal(listed.at(-1), "old")
     assert.equal(files.files.size, MAX_IMAGES)

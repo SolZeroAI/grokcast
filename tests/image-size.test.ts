@@ -9,15 +9,18 @@ const jpegHeader = (width: number, height: number) => {
   const bytes = new Uint8Array([
     0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0, 0, 0, 0, 0x03,
   ])
+
   const view = new DataView(bytes.buffer)
   view.setUint16(13, height)
   view.setUint16(15, width)
+
   return bytes
 }
 
 const riff = (chunk: string) => {
   const bytes = new Uint8Array(40)
   bytes.set(new TextEncoder().encode(`RIFF\0\0\0\0WEBP${chunk}`), 0)
+
   return { bytes, view: new DataView(bytes.buffer) }
 }
 
@@ -25,12 +28,14 @@ const webpExtended = (width: number, height: number) => {
   const { bytes, view } = riff("VP8X")
   view.setUint32(24, (width - 1) & 0xffffff, true)
   view.setUint32(27, (height - 1) & 0xffffff, true)
+
   return bytes
 }
 
 const webpLossless = (width: number, height: number) => {
   const { bytes, view } = riff("VP8L")
   view.setUint32(21, (width - 1) | ((height - 1) << 14), true)
+
   return bytes
 }
 
@@ -38,6 +43,7 @@ const webpLossy = (width: number, height: number) => {
   const { bytes, view } = riff("VP8 ")
   view.setUint16(26, width, true)
   view.setUint16(28, height, true)
+
   return bytes
 }
 

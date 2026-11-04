@@ -22,10 +22,7 @@ const signedIn = () =>
     }),
   )
 
-const runFiles = <A, E>(
-  fetch: FakeFetch,
-  use: (files: GrokFiles["Service"]) => Effect.Effect<A, E>,
-) =>
+const runFiles = <A, E>(fetch: FakeFetch, use: (files: GrokFiles["Service"]) => Effect.Effect<A, E>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(GrokFiles.use(use)),
@@ -67,6 +64,7 @@ describe("GrokFiles.list", () => {
         ],
       }),
     )
+
     const list = await runFiles(fetch, (files) => files.list)
     assert.equal(list.more, false)
     assert.deepEqual(
@@ -96,14 +94,12 @@ describe("GrokFiles.list", () => {
     const fetch = fakeFetch((_, index) =>
       Response.json({ data: [wireFile(`file-${index}`)], pagination_token: `page-${index + 1}` }),
     )
+
     const list = await runFiles(fetch, (files) => files.list)
     assert.equal(fetch.requests.length, 5)
     assert.equal(list.files.length, 5)
     assert.equal(list.more, true)
-    assert.equal(
-      new URL(fetch.requests[1]?.url ?? "").searchParams.get("pagination_token"),
-      "page-1",
-    )
+    assert.equal(new URL(fetch.requests[1]?.url ?? "").searchParams.get("pagination_token"), "page-1")
   })
 
   it("explains a 403 as the plan", async () => {
@@ -111,6 +107,7 @@ describe("GrokFiles.list", () => {
       fakeFetch(() => json({ error: "forbidden" }, 403)),
       (files) => Effect.flip(files.list),
     )
+
     assert.equal(error._tag, "FilesError")
     assert.equal(error.reason, "plan")
   })
@@ -119,6 +116,7 @@ describe("GrokFiles.list", () => {
 describe("GrokFiles changes", () => {
   it("uploads the bytes with the file name and expiry", async () => {
     const fetch = fakeFetch(() => Response.json(wireFile("file-9", { filename: "a.txt" })))
+
     const uploaded = await runFiles(fetch, (files) =>
       files.upload({
         filename: "a.txt",
@@ -126,13 +124,16 @@ describe("GrokFiles changes", () => {
         expiresAfter: Option.some(3600),
       }),
     )
+
     assert.equal(uploaded.id, "file-9")
     const request = fetch.requests[0]
     assert.ok(request)
     assert.equal(request.method, "POST")
+
     const form = await new Response(request.body, {
       headers: { "content-type": request.headers.get("content-type") ?? "" },
     }).formData()
+
     assert.equal(form.get("expires_after"), "3600")
     const part = form.get("file")
     assert.ok(part instanceof File)
@@ -154,6 +155,7 @@ describe("GrokFiles changes", () => {
         ? Response.json({ id: "file-1", revoked: true })
         : Response.json({ public_url: "https://files.x.ai/p/xyz", expires_at: 1_800_000_000 }),
     )
+
     const link = await runFiles(fetch, (files) => files.share("file-1", Option.some(86_400)))
     assert.equal(link.url, "https://files.x.ai/p/xyz")
     assert.deepEqual(link.expiresAt, Option.some(1_800_000_000_000))

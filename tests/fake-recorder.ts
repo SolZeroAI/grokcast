@@ -21,21 +21,25 @@ export class FakeRecorder {
   /** Queue audio chunks to send once the recorder starts. */
   speak(...chunks: ReadonlyArray<Uint8Array>) {
     this.script.push((events) => chunks.forEach(events.audio))
+
     return this
   }
 
   /** Queue an exit to report once the recorder starts. */
   exitWith(exit: RecorderExit) {
     this.script.push((events) => events.exit(exit))
+
     return this
   }
 
   /** Called by the fake launcher. The script plays on a later tick, like a real process. */
   start(events: RecorderEvents): RecorderProcess {
     setImmediate(() => this.script.forEach((step) => step(events)))
+
     return {
       finish: () => {
         this.finished = true
+
         if (this.exitOnFinish) setImmediate(() => events.exit(RecorderExit.Finished()))
       },
       kill: () => {
@@ -50,6 +54,7 @@ export class FakeRecorder {
 export const chunk = (...samples: ReadonlyArray<number>) => {
   const view = new DataView(new ArrayBuffer(samples.length * 2))
   samples.forEach((sample, index) => view.setInt16(index * 2, sample, true))
+
   return new Uint8Array(view.buffer)
 }
 
@@ -65,10 +70,7 @@ export const fakeRecorderLayer = (recorder: FakeRecorder) =>
             request: Effect.succeed(true),
           }),
         ),
-        Layer.succeed(
-          RecorderLauncher,
-          RecorderLauncher.of({ start: (_args, events) => recorder.start(events) }),
-        ),
+        Layer.succeed(RecorderLauncher, RecorderLauncher.of({ start: (_args, events) => recorder.start(events) })),
       ),
     ),
   )

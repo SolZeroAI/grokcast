@@ -22,10 +22,7 @@ const signedIn = () =>
     }),
   )
 
-const runCatalog = <A, E>(
-  fetch: FakeFetch,
-  use: (catalog: ModelCatalog["Service"]) => Effect.Effect<A, E>,
-) =>
+const runCatalog = <A, E>(fetch: FakeFetch, use: (catalog: ModelCatalog["Service"]) => Effect.Effect<A, E>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(ModelCatalog.use(use)),
@@ -82,10 +79,15 @@ const video = {
 const catalogFetch = (general: () => Response) =>
   fakeFetch((request) => {
     const path = new URL(request.url).pathname
+
     if (path.endsWith("/language-models")) return Response.json({ models: [language] })
+
     if (path.endsWith("/image-generation-models")) return Response.json({ models: [image] })
+
     if (path.endsWith("/video-generation-models")) return Response.json({ models: [video] })
+
     if (path.endsWith("/models")) return general()
+
     return json({ error: "unexpected" }, 404)
   })
 
@@ -94,6 +96,7 @@ describe("ModelCatalog.list", () => {
     const fetch = catalogFetch(() =>
       Response.json({ object: "list", data: [{ ...language, context_length: 256_000 }] }),
     )
+
     const models = await runCatalog(fetch, (catalog) => catalog.list)
     assert.deepEqual(
       models.map((model) => [model.id, model.kind]),
@@ -110,9 +113,7 @@ describe("ModelCatalog.list", () => {
     assert.deepEqual(grok.aliases, ["grok-latest"])
     assert.equal(grok.created, 1_700_000_000_000)
     assert.deepEqual(models[1]?.maxPromptLength, Option.some(1024))
-    assert.ok(
-      fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"),
-    )
+    assert.ok(fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"))
   })
 
   it("still lists the models when the general list fails, without context lengths", async () => {
@@ -120,6 +121,7 @@ describe("ModelCatalog.list", () => {
       catalogFetch(() => json({ error: "nope" }, 500)),
       (catalog) => catalog.list,
     )
+
     assert.equal(models.length, 3)
     assert.ok(models.every((model) => Option.isNone(model.contextLength)))
   })
@@ -133,6 +135,7 @@ describe("ModelCatalog.list", () => {
       ),
       (catalog) => Effect.flip(catalog.list),
     )
+
     assert.equal(error._tag, "ModelsError")
     assert.equal(error.reason, "signIn")
   })
@@ -148,6 +151,7 @@ describe("ModelCatalog.tokenize", () => {
         ],
       }),
     )
+
     const tokens = await runCatalog(fetch, (catalog) => catalog.tokenize("grok-4", "Hello world"))
     assert.deepEqual(
       tokens.map((token) => [token.id, token.text]),
@@ -167,6 +171,7 @@ describe("ModelCatalog.tokenize", () => {
       fakeFetch(() => json({ error: "slow down" }, 429)),
       (catalog) => Effect.flip(catalog.tokenize("grok-4", "Hi")),
     )
+
     assert.equal(error.reason, "usageLimit")
   })
 })

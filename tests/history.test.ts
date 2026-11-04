@@ -41,9 +41,8 @@ describe("DictationHistory", () => {
   })
 
   it("lists dictations newest first", async () => {
-    const listed = await run(
-      add("first").pipe(Effect.andThen(add("second")), Effect.andThen(texts)),
-    )
+    const listed = await run(add("first").pipe(Effect.andThen(add("second")), Effect.andThen(texts)))
+
     assert.deepEqual(listed, ["second", "first"])
   })
 
@@ -57,6 +56,7 @@ describe("DictationHistory", () => {
         },
       ).pipe(Effect.andThen(texts)),
     )
+
     assert.equal(listed.length, MAX_HISTORY)
     assert.equal(listed[0], `${MAX_HISTORY + 4}`)
   })
@@ -67,16 +67,17 @@ describe("DictationHistory", () => {
         const first = yield* add("first")
         yield* add("second")
         yield* DictationHistory.use((history) => history.remove(first.id))
+
         return yield* texts
       }),
     )
+
     assert.deepEqual(afterRemove, ["second"])
+
     const afterClear = await run(
-      add("first").pipe(
-        Effect.andThen(DictationHistory.use((history) => history.clear)),
-        Effect.andThen(texts),
-      ),
+      add("first").pipe(Effect.andThen(DictationHistory.use((history) => history.clear)), Effect.andThen(texts)),
     )
+
     assert.deepEqual(afterClear, [])
   })
 
@@ -85,9 +86,11 @@ describe("DictationHistory", () => {
       Effect.gen(function* () {
         const store = yield* KeyValueStore.KeyValueStore
         yield* store.set("dictation-history", '[{"id":"1","text":"old","createdAt":1,"seconds":2}]')
+
         return yield* DictationHistory.use((history) => history.list)
       }),
     )
+
     assert.deepEqual(
       listed.map((entry) => [entry.text, entry.language, entry.readySeconds, entry.live]),
       [["old", Option.none(), Option.none(), Option.none()]],
@@ -101,9 +104,11 @@ describe("DictationHistory", () => {
         yield* store.set("dictation-history", "not json")
         const before = yield* texts
         yield* add("fresh")
+
         return [before, yield* texts]
       }),
     )
+
     assert.deepEqual(listed, [[], ["fresh"]])
   })
 })

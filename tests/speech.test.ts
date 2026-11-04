@@ -44,14 +44,10 @@ const speak = (fetch: FakeFetch, text = "Hello there.", settings = xaiDefaults) 
 const speakError = (fetch: FakeFetch, text = "Hello there.") =>
   Effect.runPromise(Effect.flip(speakEffect(fetch, text, xaiDefaults)))
 
-const mp3 = () =>
-  new Response(new Uint8Array([0x49, 0x44, 0x33, 1]), { headers: { "content-type": "audio/mpeg" } })
+const mp3 = () => new Response(new Uint8Array([0x49, 0x44, 0x33, 1]), { headers: { "content-type": "audio/mpeg" } })
 
 const RequestBody = Schema.fromJsonString(
-  Schema.Record(
-    Schema.String,
-    Schema.Union([Schema.String, Schema.Number, Schema.Struct({ codec: Schema.String })]),
-  ),
+  Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number, Schema.Struct({ codec: Schema.String })])),
 )
 
 const bodyOf = (fetch: FakeFetch) => Schema.decodeUnknownSync(RequestBody)(fetch.requests[0]?.body)
@@ -111,6 +107,7 @@ describe("Speaker.speak", () => {
 
   it("asks the user to sign in when nobody is signed in", async () => {
     const fetch = fakeFetch(mp3)
+
     const error = await Effect.runPromise(
       Effect.flip(
         TestClock.setTime(NOW).pipe(
@@ -119,6 +116,7 @@ describe("Speaker.speak", () => {
         ),
       ),
     )
+
     assert.equal(error.reason, "signIn")
     assert.equal(fetch.requests.length, 0)
   })
