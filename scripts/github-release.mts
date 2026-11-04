@@ -32,8 +32,7 @@ export function githubRelease(): TegamiPlugin {
 
 class GithubReleaseTask extends PublishTask<void> {
   name = "github:release"
-  description =
-    "Create the GitHub release and package tag. The extension is private and is not published to npm."
+  description = "Create the GitHub release and package tag. The extension is private and is not published to npm."
 
   override async status(opts: PublishTaskRunContext): Promise<"pending" | undefined> {
     const target = releaseTarget(opts.context, opts.plan)
@@ -67,9 +66,7 @@ function releaseTarget(context: TegamiContext, plan: PublishPlan): ReleaseTarget
     if (!pkg || pkg.name !== PACKAGE_NAME || !pkg.version) continue
 
     const notes = packagePlan.changelogs
-      .flatMap((entry) =>
-        entry.sections.flatMap((section) => [`### ${section.title}`, "", section.content, ""]),
-      )
+      .flatMap((entry) => entry.sections.flatMap((section) => [`### ${section.title}`, "", section.content, ""]))
       .join("\n")
       .trim()
 
@@ -171,7 +168,5 @@ async function createRelease(target: ReleaseTarget): Promise<void> {
     if (body.includes("already_exists")) return
   }
 
-  throw new Error(
-    `Could not create the GitHub release for ${target.tag} (HTTP ${response.status}).`,
-  )
+  throw new Error(`Could not create the GitHub release for ${target.tag} (HTTP ${response.status}).`)
 }

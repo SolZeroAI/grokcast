@@ -157,9 +157,7 @@ describe("pollDeviceToken", () => {
 
     const error = await run(
       Effect.gen(function* () {
-        const fiber = yield* Effect.forkChild(
-          Effect.flip(pollDeviceToken(endpoints, "client", device)),
-        )
+        const fiber = yield* Effect.forkChild(Effect.flip(pollDeviceToken(endpoints, "client", device)))
 
         yield* TestClock.adjust("5 seconds")
 
@@ -177,9 +175,7 @@ describe("pollDeviceToken", () => {
     const error = await run(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(
-          Effect.flip(
-            pollDeviceToken(endpoints, "client", new DeviceCode({ ...device, expiresIn: 10 })),
-          ),
+          Effect.flip(pollDeviceToken(endpoints, "client", new DeviceCode({ ...device, expiresIn: 10 }))),
         )
 
         yield* TestClock.adjust("10 seconds")
@@ -212,14 +208,9 @@ describe("pollDeviceToken", () => {
 
 describe("refreshTokens", () => {
   it("sends a refresh_token grant", async () => {
-    const fetch = fakeFetch(() =>
-      json({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 21600 }),
-    )
+    const fetch = fakeFetch(() => json({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 21600 }))
 
-    const tokens = await run(
-      refreshTokens(endpoints, "client", Redacted.make("old-refresh")),
-      fetch,
-    )
+    const tokens = await run(refreshTokens(endpoints, "client", Redacted.make("old-refresh")), fetch)
 
     assert.deepEqual(Option.map(tokens.refresh_token, Redacted.value), Option.some("new-refresh"))
     const sent = formOf(fetch, 0)
@@ -230,10 +221,7 @@ describe("refreshTokens", () => {
   it("reports invalid_grant for a spent refresh token", async () => {
     const fetch = fakeFetch(() => json({ error: "invalid_grant" }, 400))
 
-    const error = await run(
-      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("spent"))),
-      fetch,
-    )
+    const error = await run(Effect.flip(refreshTokens(endpoints, "client", Redacted.make("spent"))), fetch)
 
     assert.equal(error._tag, "OAuthError")
     assert.equal(error.code, "invalid_grant")
@@ -242,10 +230,7 @@ describe("refreshTokens", () => {
   it("rejects a response with no access token", async () => {
     const fetch = fakeFetch(() => json({ token_type: "Bearer" }))
 
-    const error = await run(
-      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("refresh"))),
-      fetch,
-    )
+    const error = await run(Effect.flip(refreshTokens(endpoints, "client", Redacted.make("refresh"))), fetch)
 
     assert.equal(error.code, "invalid_token_response")
   })
@@ -253,10 +238,7 @@ describe("refreshTokens", () => {
   it("keeps tokens out of error messages", async () => {
     const fetch = fakeFetch(() => json({ access_token: "secret-access", expires_in: "soon" }))
 
-    const error = await run(
-      Effect.flip(refreshTokens(endpoints, "client", Redacted.make("secret-refresh"))),
-      fetch,
-    )
+    const error = await run(Effect.flip(refreshTokens(endpoints, "client", Redacted.make("secret-refresh"))), fetch)
 
     assert.doesNotMatch(String(error), /secret/)
   })

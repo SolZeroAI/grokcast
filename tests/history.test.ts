@@ -41,9 +41,7 @@ describe("DictationHistory", () => {
   })
 
   it("lists dictations newest first", async () => {
-    const listed = await run(
-      add("first").pipe(Effect.andThen(add("second")), Effect.andThen(texts)),
-    )
+    const listed = await run(add("first").pipe(Effect.andThen(add("second")), Effect.andThen(texts)))
 
     assert.deepEqual(listed, ["second", "first"])
   })
@@ -77,10 +75,7 @@ describe("DictationHistory", () => {
     assert.deepEqual(afterRemove, ["second"])
 
     const afterClear = await run(
-      add("first").pipe(
-        Effect.andThen(DictationHistory.use((history) => history.clear)),
-        Effect.andThen(texts),
-      ),
+      add("first").pipe(Effect.andThen(DictationHistory.use((history) => history.clear)), Effect.andThen(texts)),
     )
 
     assert.deepEqual(afterClear, [])

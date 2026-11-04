@@ -8,15 +8,7 @@ import * as Schema from "effect/Schema"
 import * as TestClock from "effect/testing/TestClock"
 import { ImageGenerator, SourceImage, type ImageRequest } from "../src/lib/images.ts"
 import { StoredTokens } from "../src/lib/session.ts"
-import {
-  fakeFetch,
-  json,
-  memoryStore,
-  NOW,
-  testLayer,
-  type FakeFetch,
-  type MemoryStore,
-} from "./support.ts"
+import { fakeFetch, json, memoryStore, NOW, testLayer, type FakeFetch, type MemoryStore } from "./support.ts"
 
 const signedIn = () =>
   memoryStore(
@@ -80,9 +72,7 @@ describe("ImageGenerator.create", () => {
   })
 
   it("sends the aspect ratio, resolution, and count when the user picks them", async () => {
-    const fetch = fakeFetch(() =>
-      imagesResponse({ b64_json: base64(PNG) }, { b64_json: base64(PNG) }),
-    )
+    const fetch = fakeFetch(() => imagesResponse({ b64_json: base64(PNG) }, { b64_json: base64(PNG) }))
 
     const images = await create(
       fetch,
@@ -104,11 +94,7 @@ describe("ImageGenerator.create", () => {
 
   it("edits one image by sending it as a data URL", async () => {
     const fetch = fakeFetch(() => imagesResponse({ b64_json: base64(PNG) }))
-    await create(
-      fetch,
-      signedIn(),
-      request({ sources: [new SourceImage({ bytes: PNG, mimeType: "image/png" })] }),
-    )
+    await create(fetch, signedIn(), request({ sources: [new SourceImage({ bytes: PNG, mimeType: "image/png" })] }))
     assert.equal(fetch.requests[0]?.url, "https://api.x.ai/v1/images/edits")
     const body = bodyOf(fetch)
     assert.deepEqual(body.image, { url: `data:image/png;base64,${base64(PNG)}` })
@@ -140,11 +126,7 @@ describe("ImageGenerator.create", () => {
     assert.equal(empty.reason, "failed")
     const source = new SourceImage({ bytes: PNG, mimeType: "image/png" })
 
-    const many = await createError(
-      fetch,
-      signedIn(),
-      request({ sources: [source, source, source, source] }),
-    )
+    const many = await createError(fetch, signedIn(), request({ sources: [source, source, source, source] }))
 
     assert.equal(many.reason, "failed")
     assert.equal(fetch.requests.length, 0)

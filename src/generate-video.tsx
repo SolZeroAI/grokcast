@@ -68,8 +68,7 @@ const pickedFile = (paths: Option.Option<ReadonlyArray<string>>) =>
   )
 
 /** A dropdown's value, or None when it is left to xAI. */
-const chosen = (value: Option.Option<string>) =>
-  Option.filter(value, (picked) => picked !== XAI_DEFAULT)
+const chosen = (value: Option.Option<string>) => Option.filter(value, (picked) => picked !== XAI_DEFAULT)
 
 const chosenSeconds = (value: Option.Option<string>) =>
   chosen(value).pipe(Option.map(Number), Option.filter(Number.isFinite))
@@ -111,9 +110,7 @@ export default function GenerateVideo() {
         title="Make"
         value={mode}
         onChange={(value) =>
-          setMode(
-            Schema.decodeUnknownOption(Mode)(value).pipe(Option.getOrElse((): Mode => "generate")),
-          )
+          setMode(Schema.decodeUnknownOption(Mode)(value).pipe(Option.getOrElse((): Mode => "generate")))
         }
       >
         <Form.Dropdown.Item value="generate" title="New Video" icon={Icon.FilmStrip} />
@@ -149,27 +146,17 @@ export default function GenerateVideo() {
           id="video"
           title="Video"
           info={
-            mode === "extend"
-              ? "An MP4 of 2 to 15 seconds. The new part continues from its end."
-              : "An MP4 to change."
+            mode === "extend" ? "An MP4 of 2 to 15 seconds. The new part continues from its end." : "An MP4 to change."
           }
           allowMultipleSelection={false}
           canChooseDirectories={false}
         />
       )}
       {mode === "edit" ? null : (
-        <Form.Dropdown
-          id="duration"
-          title={mode === "extend" ? "Seconds to Add" : "Length"}
-          defaultValue={XAI_DEFAULT}
-        >
+        <Form.Dropdown id="duration" title={mode === "extend" ? "Seconds to Add" : "Length"} defaultValue={XAI_DEFAULT}>
           <Form.Dropdown.Item value={XAI_DEFAULT} title="xAI Default" />
           {(mode === "extend" ? EXTEND_SECONDS : GENERATE_SECONDS).map((seconds) => (
-            <Form.Dropdown.Item
-              key={seconds}
-              value={String(seconds)}
-              title={`${seconds} Seconds`}
-            />
+            <Form.Dropdown.Item key={seconds} value={String(seconds)} title={`${seconds} Seconds`} />
           ))}
         </Form.Dropdown>
       )}
@@ -248,15 +235,12 @@ function VideoJob({ values }: { readonly values: FormValues }) {
   })
 
   useEffect(() => {
-    const onPending = (progress: Option.Option<number>) =>
-      Effect.sync(() => setState(State.Generating({ progress })))
+    const onPending = (progress: Option.Option<number>) => Effect.sync(() => setState(State.Generating({ progress })))
 
     const program = Task.$match(task.task, {
       Make: () =>
         requestFrom(values).pipe(
-          Effect.flatMap((request) =>
-            VideoGenerator.use((videos) => videos.generate(request, onPending)),
-          ),
+          Effect.flatMap((request) => VideoGenerator.use((videos) => videos.generate(request, onPending))),
         ),
       CheckAgain: ({ requestId }) =>
         onPending(Option.none()).pipe(
@@ -266,9 +250,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
 
     const fiber = GrokRuntime.runFork(
       program.pipe(
-        Effect.tap((video) =>
-          Effect.sync(() => setState(State.Done({ video, saved: Option.none() }))),
-        ),
+        Effect.tap((video) => Effect.sync(() => setState(State.Done({ video, saved: Option.none() })))),
         Effect.catchTag("VideoError", (error) =>
           Effect.sync(() =>
             setState(
@@ -296,9 +278,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
   const save = (video: Video) =>
     GrokRuntime.runFork(
       saveToDownloads(video).pipe(
-        Effect.tap((path) =>
-          Effect.sync(() => setState(State.Done({ video, saved: Option.some(path) }))),
-        ),
+        Effect.tap((path) => Effect.sync(() => setState(State.Done({ video, saved: Option.some(path) })))),
         Effect.flatMap((path) =>
           Effect.tryPromise(() =>
             showToast({
@@ -334,9 +314,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
   const summary = describeRequest(values)
 
   return State.$match(state, {
-    Starting: () => (
-      <Detail isLoading markdown={summary} metadata={<Status label="Sending to Grok" />} />
-    ),
+    Starting: () => <Detail isLoading markdown={summary} metadata={<Status label="Sending to Grok" />} />,
     Generating: ({ progress }) => (
       <Detail
         isLoading
@@ -364,10 +342,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
         metadata={
           <Status label="Ready" icon={{ source: Icon.CheckCircle, tintColor: Color.Green }}>
             <Detail.Metadata.Label title="Length" text={`${video.seconds} seconds`} />
-            <Detail.Metadata.Label
-              title="Model"
-              text={Option.getOrElse(video.model, () => "xAI default")}
-            />
+            <Detail.Metadata.Label title="Model" text={Option.getOrElse(video.model, () => "xAI default")} />
             <Detail.Metadata.Label
               title="Saved"
               text={Option.match(saved, { onNone: () => "Not yet", onSome: basename })}
@@ -386,9 +361,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
                   onAction={() => save(video)}
                 />
               ),
-              onSome: (path) => (
-                <Action.ShowInFinder path={path} shortcut={{ modifiers: ["cmd"], key: "s" }} />
-              ),
+              onSome: (path) => <Action.ShowInFinder path={path} shortcut={{ modifiers: ["cmd"], key: "s" }} />,
             })}
             <Action.CopyToClipboard
               title="Copy Video Link"
@@ -404,10 +377,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
       <Detail
         markdown={message}
         metadata={
-          <Status
-            label="The video did not finish"
-            icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }}
-          />
+          <Status label="The video did not finish" icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }} />
         }
         actions={
           <ActionPanel>
@@ -474,8 +444,7 @@ const describeRequest = (values: FormValues): string => {
   ].join("\n")
 }
 
-const unreadable = (message: string) =>
-  new VideoError({ reason: "failed", message, requestId: Option.none() })
+const unreadable = (message: string) => new VideoError({ reason: "failed", message, requestId: Option.none() })
 
 /** Read a picked file, when xAI accepts its kind. */
 const readMedia = Effect.fn("readMedia")(function* (path: string, kind: "image" | "video") {

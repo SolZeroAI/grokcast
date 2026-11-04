@@ -68,8 +68,7 @@ function setup({ access = "authorized", grant = true, recorder = new FakeRecorde
 
 const record = Recorder.use((recorder) => Effect.succeed(recorder.record))
 
-const collect = (take: number) =>
-  Effect.flatMap(record, (audio) => Stream.runCollect(Stream.take(audio, take)))
+const collect = (take: number) => Effect.flatMap(record, (audio) => Stream.runCollect(Stream.take(audio, take)))
 
 describe("Recorder.record", () => {
   it("starts the recorder at 16 kHz with a time limit, streams its audio, and stops it when done", async () => {
@@ -136,9 +135,7 @@ describe("Recorder.record", () => {
   })
 
   it("reports what the recorder printed when it fails", async () => {
-    const recorder = new FakeRecorder().exitWith(
-      exitFromCode(Option.some(1), "No microphone is available.\n"),
-    )
+    const recorder = new FakeRecorder().exitWith(exitFromCode(Option.some(1), "No microphone is available.\n"))
 
     const { run } = setup({ recorder })
     const error = await run(Effect.flip(collect(1)))

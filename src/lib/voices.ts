@@ -193,38 +193,39 @@ export const labelsOf = (voice: GrokVoice): VoiceLabels =>
 const voiceOrder = Order.combine(
   Order.combine(
     Order.mapInput(Order.Boolean, (voice: GrokVoice) => !voice.custom),
-    Order.flip(
-      Order.mapInput(Order.Number, (voice: GrokVoice) => Option.getOrElse(voice.created, () => 0)),
-    ),
+    Order.flip(Order.mapInput(Order.Number, (voice: GrokVoice) => Option.getOrElse(voice.created, () => 0))),
   ),
   Order.mapInput(Order.String, (voice: GrokVoice) => voice.name.toLowerCase()),
 )
 
+/** `value` as ASCII bytes. */
+const ascii = (value: string) => new TextEncoder().encode(value)
+
+/** `value` as 2 little-endian bytes. */
+const uint16 = (value: number) => Uint8Array.of(value & 0xff, (value >>> 8) & 0xff)
+
+/** `value` as 4 little-endian bytes. */
+const uint32 = (value: number) =>
+  Uint8Array.of(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff)
+
 /** A RIFF header in front of mono 16 kHz 16-bit PCM, so xAI can read a recording. */
-export const wavOf = (pcm: Uint8Array): Uint8Array<ArrayBuffer> => {
-  const header = new DataView(new ArrayBuffer(44))
-
-  const ascii = (offset: number, value: string) =>
-    Arr.forEach(Arr.fromIterable(value), (char, index) =>
-      header.setUint8(offset + index, char.charCodeAt(0)),
-    )
-
-  ascii(0, "RIFF")
-  header.setUint32(4, 36 + pcm.byteLength, true)
-  ascii(8, "WAVE")
-  ascii(12, "fmt ")
-  header.setUint32(16, 16, true)
-  header.setUint16(20, 1, true)
-  header.setUint16(22, 1, true)
-  header.setUint32(24, SAMPLE_RATE, true)
-  header.setUint32(28, SAMPLE_RATE * BYTES_PER_SAMPLE, true)
-  header.setUint16(32, BYTES_PER_SAMPLE, true)
-  header.setUint16(34, BYTES_PER_SAMPLE * 8, true)
-  ascii(36, "data")
-  header.setUint32(40, pcm.byteLength, true)
-
-  return joinChunks([new Uint8Array(header.buffer), pcm])
-}
+export const wavOf = (pcm: Uint8Array): Uint8Array<ArrayBuffer> =>
+  joinChunks([
+    ascii("RIFF"),
+    uint32(36 + pcm.byteLength),
+    ascii("WAVE"),
+    ascii("fmt "),
+    uint32(16),
+    uint16(1),
+    uint16(1),
+    uint32(SAMPLE_RATE),
+    uint32(SAMPLE_RATE * BYTES_PER_SAMPLE),
+    uint16(BYTES_PER_SAMPLE),
+    uint16(BYTES_PER_SAMPLE * 8),
+    ascii("data"),
+    uint32(pcm.byteLength),
+    pcm,
+  ])
 
 const toVoicesError = (failed: string) => (error: XaiSdkError) =>
   new VoicesError(describeXaiError(error, { feature: "custom voices", failed }))
@@ -232,9 +233,7 @@ const toVoicesError = (failed: string) => (error: XaiSdkError) =>
 const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
   const { client } = yield* XaiClient
 
-  const sdk = client.pipe(
-    Effect.mapError((error) => new VoicesError({ reason: "failed", message: error.message })),
-  )
+  const sdk = client.pipe(Effect.mapError((error) => new VoicesError({ reason: "failed", message: error.message })))
 
   const options = (signal: AbortSignal, timeout = REQUEST_TIMEOUT) => ({
     signal,
@@ -242,6 +241,7 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
     timeout: Duration.toMillis(timeout),
   })
 
+  /** The user's custom voices, newest first, then Grok's built-in voices. */
   const list = Effect.gen(function* () {
     const xai = yield* sdk
     const failed = toVoicesError("xAI could not list the voices")
@@ -258,16 +258,11 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
       { concurrency: "unbounded" },
     )
 
-    return Arr.sort(
-      [...Arr.map(custom, fromCustom), ...Arr.map(builtIn.voices, fromBuiltIn)],
-      voiceOrder,
-    )
+    return Arr.sort([...Arr.map(custom, fromCustom), ...Arr.map(builtIn.voices, fromBuiltIn)], voiceOrder)
   }).pipe(Effect.withSpan("VoiceLibrary.list"))
 
-  const create = Effect.fn("VoiceLibrary.create")(function* (
-    audio: ReferenceAudio,
-    labels: VoiceLabels,
-  ) {
+  /** Make a custom voice from a clip of up to 120 seconds. */
+  const create = Effect.fn("VoiceLibrary.create")(function* (audio: ReferenceAudio, labels: VoiceLabels) {
     const xai = yield* sdk
 
     const created = yield* callXai((signal) =>
@@ -283,12 +278,13 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
     return fromCustom(created)
   })
 
+  /** Replace a custom voice's labels. */
   const update = Effect.fn("VoiceLibrary.update")(function* (id: string, labels: VoiceLabels) {
     const xai = yield* sdk
 
-    const updated = yield* callXai((signal) =>
-      xai.voice.custom.update(id, updateLabels(labels), options(signal)),
-    ).pipe(Effect.mapError(toVoicesError("xAI could not change the voice")))
+    const updated = yield* callXai((signal) => xai.voice.custom.update(id, updateLabels(labels), options(signal))).pipe(
+      Effect.mapError(toVoicesError("xAI could not change the voice")),
+    )
 
     return fromCustom(updated)
   })
@@ -300,25 +296,13 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
     )
   })
 
-  return VoiceLibrary.of({ list, create, update, remove })
+  return { list, create, update, remove }
 })
 
-export class VoiceLibrary extends Context.Service<
-  VoiceLibrary,
-  {
-    /** The user's custom voices, newest first, then Grok's built-in voices. */
-    readonly list: Effect.Effect<ReadonlyArray<GrokVoice>, VoicesError>
-    /** Make a custom voice from a clip of up to 120 seconds. */
-    readonly create: (
-      audio: ReferenceAudio,
-      labels: VoiceLabels,
-    ) => Effect.Effect<GrokVoice, VoicesError>
-    /** Replace a custom voice's labels. */
-    readonly update: (id: string, labels: VoiceLabels) => Effect.Effect<GrokVoice, VoicesError>
-    readonly remove: (id: string) => Effect.Effect<void, VoicesError>
-  }
->()("grokcast/VoiceLibrary") {
-  static readonly layer = Layer.effect(VoiceLibrary, makeLibrary())
+export class VoiceLibrary extends Context.Service<VoiceLibrary>()("grokcast/VoiceLibrary", {
+  make: makeLibrary(),
+}) {
+  static readonly layer = Layer.effect(VoiceLibrary, VoiceLibrary.make)
 }
 
 const READ_ALOUD_VOICE_KEY = "read-aloud-voice"
@@ -332,28 +316,20 @@ export class ChosenVoice extends Schema.Class<ChosenVoice>("ChosenVoice")({
 const makeReadAloudVoice = Effect.fn("ReadAloudVoice.make")(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, ChosenVoice)
 
-  return ReadAloudVoice.of({
+  return {
     // An unreadable record counts as no choice, so Read Aloud still reads.
     get: store.get(READ_ALOUD_VOICE_KEY).pipe(Effect.catch(() => Effect.succeedNone)),
-    set: (voice) =>
-      store.set(READ_ALOUD_VOICE_KEY, new ChosenVoice({ id: voice.id, name: voice.name })),
+    set: (voice: GrokVoice) => store.set(READ_ALOUD_VOICE_KEY, new ChosenVoice({ id: voice.id, name: voice.name })),
     clear: store.remove(READ_ALOUD_VOICE_KEY),
-  })
+  }
 })
 
 /**
  * The voice Read Aloud uses instead of its Voice preference. The preference is a
  * fixed list, so this is how a custom voice gets there.
  */
-export class ReadAloudVoice extends Context.Service<
-  ReadAloudVoice,
-  {
-    readonly get: Effect.Effect<Option.Option<ChosenVoice>>
-    readonly set: (
-      voice: GrokVoice,
-    ) => Effect.Effect<void, KeyValueStore.KeyValueStoreError | Schema.SchemaError>
-    readonly clear: Effect.Effect<void, KeyValueStore.KeyValueStoreError>
-  }
->()("grokcast/ReadAloudVoice") {
-  static readonly layer = Layer.effect(ReadAloudVoice, makeReadAloudVoice())
+export class ReadAloudVoice extends Context.Service<ReadAloudVoice>()("grokcast/ReadAloudVoice", {
+  make: makeReadAloudVoice(),
+}) {
+  static readonly layer = Layer.effect(ReadAloudVoice, ReadAloudVoice.make)
 }

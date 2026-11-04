@@ -79,9 +79,7 @@ export class FakeSocket implements Socket.WebSocketLike {
   }
 
   removeEventListener(type: EventType, listener: Listener) {
-    const index = this.listeners.findIndex(
-      (entry) => entry.type === type && entry.listener === listener,
-    )
+    const index = this.listeners.findIndex((entry) => entry.type === type && entry.listener === listener)
 
     if (index >= 0) this.listeners.splice(index, 1)
   }
@@ -146,9 +144,7 @@ export const fakeLiveStt = (script: Script = {}) => {
     Socket.WebSocketConstructor,
     Socket.WebSocketConstructor.of((url, options) => {
       const headers =
-        P.isString(options) || Arr.isArray(options) || P.isUndefined(options)
-          ? {}
-          : (options.headers ?? {})
+        P.isString(options) || Arr.isArray(options) || P.isUndefined(options) ? {} : (options.headers ?? {})
 
       const socket = new FakeSocket(url, headers, script)
       sockets.push(socket)

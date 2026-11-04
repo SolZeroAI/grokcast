@@ -137,10 +137,7 @@ function ModelDetail({ model }: { readonly model: GrokModel }) {
           {Option.match(model.contextLength, {
             onNone: () => null,
             onSome: (length) => (
-              <List.Item.Detail.Metadata.Label
-                title="Context"
-                text={`${numberFormat.format(length)} tokens`}
-              />
+              <List.Item.Detail.Metadata.Label title="Context" text={`${numberFormat.format(length)} tokens`} />
             ),
           })}
           {Option.match(model.maxPromptLength, {
@@ -163,13 +160,7 @@ function ModelDetail({ model }: { readonly model: GrokModel }) {
   )
 }
 
-function TagRow({
-  title,
-  values,
-}: {
-  readonly title: string
-  readonly values: ReadonlyArray<string>
-}) {
+function TagRow({ title, values }: { readonly title: string; readonly values: ReadonlyArray<string> }) {
   return Arr.match(values, {
     onEmpty: () => null,
     onNonEmpty: (all) => (
@@ -268,10 +259,7 @@ function TokenCount({ model, text }: { readonly model: string; readonly text: st
         actions={
           <ActionPanel>
             <Action.CopyToClipboard title="Copy Token Count" content={String(tokens.length)} />
-            <Action.CopyToClipboard
-              title="Copy Token IDs"
-              content={tokens.map((token) => token.id).join(" ")}
-            />
+            <Action.CopyToClipboard title="Copy Token IDs" content={tokens.map((token) => token.id).join(" ")} />
           </ActionPanel>
         }
       />
@@ -279,8 +267,7 @@ function TokenCount({ model, text }: { readonly model: string; readonly text: st
   })
 }
 
-const visible = (text: string) =>
-  text.replaceAll("`", "ˋ").replaceAll(" ", "·").replaceAll("\n", "⏎")
+const visible = (text: string) => text.replaceAll("`", "ˋ").replaceAll(" ", "·").replaceAll("\n", "⏎")
 
 /** At most this many tokens are listed, so a long text stays quick to show. */
 const SHOWN_TOKENS = 500

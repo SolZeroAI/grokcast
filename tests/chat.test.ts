@@ -24,15 +24,7 @@ import {
 } from "../src/lib/chat.ts"
 import { ChatImages, imageMarkdown, isSupportedImage } from "../src/lib/chat-images.ts"
 import { StoredTokens } from "../src/lib/session.ts"
-import {
-  fakeFetch,
-  json,
-  memoryStore,
-  NOW,
-  testLayer,
-  type FakeFetch,
-  type MemoryStore,
-} from "./support.ts"
+import { fakeFetch, json, memoryStore, NOW, testLayer, type FakeFetch, type MemoryStore } from "./support.ts"
 
 const signedIn = () =>
   memoryStore(
@@ -150,10 +142,7 @@ const provide = <A, E>(program: Effect.Effect<A, E, Chat>, fetch: FakeFetch, sto
     TestClock.setTime(NOW).pipe(
       Effect.andThen(program),
       Effect.provide(
-        Chat.layer.pipe(
-          Layer.provideMerge(ChatImages.layer),
-          Layer.provideMerge(testLayer(fetch, store)),
-        ),
+        Chat.layer.pipe(Layer.provideMerge(ChatImages.layer), Layer.provideMerge(testLayer(fetch, store))),
       ),
     ),
   )
@@ -185,12 +174,7 @@ const askError = (fetch: FakeFetch, store: MemoryStore = signedIn()) =>
   provide(
     Effect.flip(
       Chat.use((chat) =>
-        chat.ask(
-          "Say hello",
-          { conversationId: "c1", history: [], images: [] },
-          defaults,
-          progress(),
-        ),
+        chat.ask("Say hello", { conversationId: "c1", history: [], images: [] }, defaults, progress()),
       ),
     ),
     fetch,
@@ -317,9 +301,7 @@ describe("Chat.ask", () => {
   })
 
   it("explains a 402 as an account without a plan or credits", async () => {
-    const error = await askError(
-      fakeFetch(() => json({ code: "personal-team-blocked:spending-limit" }, 402)),
-    )
+    const error = await askError(fakeFetch(() => json({ code: "personal-team-blocked:spending-limit" }, 402)))
 
     assert.equal(error.reason, "plan")
     assert.match(error.message, /out of credits/)
@@ -374,8 +356,7 @@ describe("Chat.ask with images", () => {
   it("resends an earlier turn's image, and leaves it out when the file is gone", async (t) => {
     const image = await pngFile(t)
 
-    const earlier = (path: string) =>
-      new ChatTurn({ ...turn("Hi", "A chart."), images: Option.some([path]) })
+    const earlier = (path: string) => new ChatTurn({ ...turn("Hi", "A chart."), images: Option.some([path]) })
 
     const kept = fakeFetch(answerStream)
     await ask(kept, { history: [earlier(image)] })
@@ -411,12 +392,7 @@ describe("Chat.ask with images", () => {
     const unsupported = await provide(
       Effect.flip(
         Chat.use((chat) =>
-          chat.ask(
-            "What is this?",
-            { conversationId: "c1", history: [], images: [gif] },
-            defaults,
-            progress(),
-          ),
+          chat.ask("What is this?", { conversationId: "c1", history: [], images: [gif] }, defaults, progress()),
         ),
       ),
       fetch,

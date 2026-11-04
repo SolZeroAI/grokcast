@@ -9,12 +9,7 @@ export default defineConfig({
   plugins: ["unicorn", "typescript", "oxc", "react"],
   categories: { correctness: "error" },
   // Oxlint does not inherit ignorePatterns through extends, so spread the shared list.
-  ignorePatterns: [
-    ...agentToolIgnorePatterns,
-    "**/dist/**",
-    "**/node_modules/**",
-    "raycast-env.d.ts",
-  ],
+  ignorePatterns: [...agentToolIgnorePatterns, "**/dist/**", "**/node_modules/**", "raycast-env.d.ts"],
   overrides: [
     // Effect services. The views in src/*.tsx bridge Effect to React, and tests drive
     // services from outside, so the composition rules check only src/lib.

@@ -58,10 +58,7 @@ const toModelsError = (failed: string) => (error: XaiSdkError) =>
 const positive = (value: Option.Option<number>) => Option.filter(value, (number) => number > 0)
 
 /** xAI gives `created` in seconds. */
-const base = (
-  model: LanguageModel | ImageGenerationModel | VideoGenerationModel,
-  kind: ModelKind,
-) => ({
+const base = (model: LanguageModel | ImageGenerationModel | VideoGenerationModel, kind: ModelKind) => ({
   id: model.id,
   kind,
   aliases: model.aliases,
@@ -74,17 +71,17 @@ const base = (
   maxPromptLength: Option.none<number>(),
 })
 
-export const fromLanguageModel = (
-  model: LanguageModel,
-  contextLengths: ReadonlyMap<string, number>,
-): GrokModel =>
+const reasoningEffortsOf = (model: LanguageModel) =>
+  Option.match(Option.fromNullishOr(model.capabilities), {
+    onNone: () => [],
+    onSome: (capabilities) => capabilities.reasoning_effort,
+  })
+
+export const fromLanguageModel = (model: LanguageModel, contextLengths: ReadonlyMap<string, number>): GrokModel =>
   new GrokModel({
     ...base(model, "language"),
     contextLength: positive(Option.fromNullishOr(contextLengths.get(model.id))),
-    reasoningEfforts: Option.match(Option.fromNullishOr(model.capabilities), {
-      onNone: () => [],
-      onSome: (capabilities) => capabilities.reasoning_effort,
-    }),
+    reasoningEfforts: reasoningEffortsOf(model),
   })
 
 export const fromImageModel = (model: ImageGenerationModel): GrokModel =>
@@ -93,8 +90,7 @@ export const fromImageModel = (model: ImageGenerationModel): GrokModel =>
     maxPromptLength: positive(Option.some(model.max_prompt_length)),
   })
 
-export const fromVideoModel = (model: VideoGenerationModel): GrokModel =>
-  new GrokModel(base(model, "video"))
+export const fromVideoModel = (model: VideoGenerationModel): GrokModel => new GrokModel(base(model, "video"))
 
 /** Newest first, then by name. */
 const newestFirst = Order.combine(
@@ -105,9 +101,7 @@ const newestFirst = Order.combine(
 const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
   const { client } = yield* XaiClient
 
-  const sdk = client.pipe(
-    Effect.mapError((error) => new ModelsError({ reason: "failed", message: error.message })),
-  )
+  const sdk = client.pipe(Effect.mapError((error) => new ModelsError({ reason: "failed", message: error.message })))
 
   const options = (signal: AbortSignal) => ({
     signal,
@@ -115,15 +109,14 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
     timeout: Duration.toMillis(REQUEST_TIMEOUT),
   })
 
+  /** Every language, image, and video model, newest first. */
   const list = Effect.gen(function* () {
     const xai = yield* sdk
     const failed = toModelsError("xAI could not list the models")
 
     const [language, image, video, contextLengths] = yield* Effect.all(
       [
-        callXai((signal) => xai.models.language.list(options(signal))).pipe(
-          Effect.mapError(failed),
-        ),
+        callXai((signal) => xai.models.language.list(options(signal))).pipe(Effect.mapError(failed)),
         callXai((signal) => xai.models.image.list(options(signal))).pipe(Effect.mapError(failed)),
         callXai((signal) => xai.models.video.list(options(signal))).pipe(Effect.mapError(failed)),
         // Only the general list gives context lengths. Without it, the rest still shows.
@@ -155,33 +148,22 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
     )
   }).pipe(Effect.withSpan("ModelCatalog.list"))
 
+  /** Split `text` into tokens the way language model `model` reads it. */
   const tokenize = Effect.fn("ModelCatalog.tokenize")(function* (model: string, text: string) {
     const xai = yield* sdk
 
-    const result = yield* callXai((signal) =>
-      xai.tokenizer.encode({ model, text }, options(signal)),
-    ).pipe(Effect.mapError(toModelsError("xAI could not count the tokens")))
-
-    return Arr.map(
-      result.token_ids,
-      (token) => new Token({ id: token.token_id, text: token.string_token }),
+    const result = yield* callXai((signal) => xai.tokenizer.encode({ model, text }, options(signal))).pipe(
+      Effect.mapError(toModelsError("xAI could not count the tokens")),
     )
+
+    return Arr.map(result.token_ids, (token) => new Token({ id: token.token_id, text: token.string_token }))
   })
 
-  return ModelCatalog.of({ list, tokenize })
+  return { list, tokenize }
 })
 
-export class ModelCatalog extends Context.Service<
-  ModelCatalog,
-  {
-    /** Every language, image, and video model, newest first. */
-    readonly list: Effect.Effect<ReadonlyArray<GrokModel>, ModelsError>
-    /** Split `text` into tokens the way language model `model` reads it. */
-    readonly tokenize: (
-      model: string,
-      text: string,
-    ) => Effect.Effect<ReadonlyArray<Token>, ModelsError>
-  }
->()("grokcast/ModelCatalog") {
-  static readonly layer = Layer.effect(ModelCatalog, makeCatalog())
+export class ModelCatalog extends Context.Service<ModelCatalog>()("grokcast/ModelCatalog", {
+  make: makeCatalog(),
+}) {
+  static readonly layer = Layer.effect(ModelCatalog, ModelCatalog.make)
 }

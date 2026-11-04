@@ -1,12 +1,4 @@
-import {
-  Clipboard,
-  closeMainWindow,
-  getSelectedText,
-  showHUD,
-  showToast,
-  Toast,
-  type LaunchProps,
-} from "@raycast/api"
+import { Clipboard, closeMainWindow, getSelectedText, showHUD, showToast, Toast, type LaunchProps } from "@raycast/api"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { GrokRuntime } from "./lib/grok.ts"
@@ -60,9 +52,7 @@ export default async function ReadAloud(props: LaunchProps<{ arguments: ReadAlou
       ),
       Effect.catchTags({
         SpeechError: (error) =>
-          error.reason === "signIn"
-            ? Effect.andThen(hud(error.message), signIn)
-            : failure(error.message),
+          error.reason === "signIn" ? Effect.andThen(hud(error.message), signIn) : failure(error.message),
         PlaybackError: (error) => failure(error.message),
       }),
     ),

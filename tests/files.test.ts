@@ -22,10 +22,7 @@ const signedIn = () =>
     }),
   )
 
-const runFiles = <A, E>(
-  fetch: FakeFetch,
-  use: (files: GrokFiles["Service"]) => Effect.Effect<A, E>,
-) =>
+const runFiles = <A, E>(fetch: FakeFetch, use: (files: GrokFiles["Service"]) => Effect.Effect<A, E>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(GrokFiles.use(use)),
@@ -102,10 +99,7 @@ describe("GrokFiles.list", () => {
     assert.equal(fetch.requests.length, 5)
     assert.equal(list.files.length, 5)
     assert.equal(list.more, true)
-    assert.equal(
-      new URL(fetch.requests[1]?.url ?? "").searchParams.get("pagination_token"),
-      "page-1",
-    )
+    assert.equal(new URL(fetch.requests[1]?.url ?? "").searchParams.get("pagination_token"), "page-1")
   })
 
   it("explains a 403 as the plan", async () => {

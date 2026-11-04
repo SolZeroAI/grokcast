@@ -7,13 +7,7 @@ import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import { firstText, readAloud } from "../src/lib/read-aloud.ts"
 import { AudioLauncher, PlaybackError, SpeechPlayer } from "../src/lib/speech-player.ts"
 import { GrokVoice, ReadAloudVoice } from "../src/lib/voices.ts"
-import {
-  Speaker,
-  Speech,
-  SpeechError,
-  SpeechPreferences,
-  SpeechSettings,
-} from "../src/lib/speech.ts"
+import { Speaker, Speech, SpeechError, SpeechPreferences, SpeechSettings } from "../src/lib/speech.ts"
 
 interface FakeAudio {
   /** Process IDs that are playing now. */
@@ -107,10 +101,9 @@ describe("readAloud", () => {
     const audio = fakeAudio()
 
     const results = await Effect.runPromise(
-      Effect.all([
-        readAloud(text("Hello."), Effect.void),
-        readAloud(text("Hello again."), Effect.void),
-      ]).pipe(Effect.provide(layer(audio))),
+      Effect.all([readAloud(text("Hello."), Effect.void), readAloud(text("Hello again."), Effect.void)]).pipe(
+        Effect.provide(layer(audio)),
+      ),
     )
 
     assert.deepEqual(
@@ -140,9 +133,7 @@ describe("readAloud", () => {
 
   it("fails with noText when there is nothing to read", async () => {
     const error = await Effect.runPromise(
-      Effect.flip(readAloud(Effect.succeedNone, Effect.void)).pipe(
-        Effect.provide(layer(fakeAudio())),
-      ),
+      Effect.flip(readAloud(Effect.succeedNone, Effect.void)).pipe(Effect.provide(layer(fakeAudio()))),
     )
 
     assert.ok(error instanceof SpeechError)

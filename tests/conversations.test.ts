@@ -6,12 +6,7 @@ import * as Option from "effect/Option"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 import * as TestClock from "effect/testing/TestClock"
 import { ChatTurn } from "../src/lib/chat.ts"
-import {
-  ChatConversations,
-  MAX_CONVERSATIONS,
-  newConversation,
-  withTurn,
-} from "../src/lib/conversations.ts"
+import { ChatConversations, MAX_CONVERSATIONS, newConversation, withTurn } from "../src/lib/conversations.ts"
 import { NOW } from "./support.ts"
 
 const run = <A, E>(program: Effect.Effect<A, E, ChatConversations | KeyValueStore.KeyValueStore>) =>
@@ -57,9 +52,7 @@ describe("ChatConversations", () => {
   it("names a conversation after its first question and keeps later turns in order", async () => {
     const conversation = await run(
       newConversation.pipe(
-        Effect.map((empty) =>
-          withTurn(withTurn(empty, turnAt(NOW, "First?")), turnAt(NOW + 5000, "Second?")),
-        ),
+        Effect.map((empty) => withTurn(withTurn(empty, turnAt(NOW, "First?")), turnAt(NOW + 5000, "Second?"))),
       ),
     )
 
@@ -76,9 +69,7 @@ describe("ChatConversations", () => {
       Effect.gen(function* () {
         const first = yield* start("first")
         yield* start("second")
-        yield* ChatConversations.use((saved) =>
-          saved.save(withTurn(first, turnAt(NOW + 10, "again"))),
-        )
+        yield* ChatConversations.use((saved) => saved.save(withTurn(first, turnAt(NOW + 10, "again"))))
 
         return yield* titles
       }),

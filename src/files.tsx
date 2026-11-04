@@ -76,9 +76,7 @@ export default function Files() {
     setBusy(true)
     GrokRuntime.runFork(
       Effect.gen(function* () {
-        const toast = yield* Effect.tryPromise(() =>
-          showToast({ style: Toast.Style.Animated, title }),
-        )
+        const toast = yield* Effect.tryPromise(() => showToast({ style: Toast.Style.Animated, title }))
 
         yield* program.pipe(
           Effect.flatMap((result) => done(result, toast)),
@@ -193,12 +191,7 @@ export default function Files() {
   )
 
   const reloadAction = (
-    <Action
-      title="Reload"
-      icon={Icon.ArrowClockwise}
-      shortcut={{ modifiers: ["cmd"], key: "r" }}
-      onAction={reload}
-    />
+    <Action title="Reload" icon={Icon.ArrowClockwise} shortcut={{ modifiers: ["cmd"], key: "r" }} onAction={reload} />
   )
 
   return State.$match(state, {
@@ -226,11 +219,7 @@ export default function Files() {
       </List>
     ),
     Loaded: ({ list }) => (
-      <List
-        isLoading={busy}
-        isShowingDetail={list.files.length > 0}
-        searchBarPlaceholder="Search files"
-      >
+      <List isLoading={busy} isShowingDetail={list.files.length > 0} searchBarPlaceholder="Search files">
         <List.EmptyView
           icon={Icon.Document}
           title="No files yet"
@@ -268,11 +257,7 @@ export default function Files() {
                   })}
                   <Action.CopyToClipboard title="Copy File ID" content={file.id} />
                   <ActionPanel.Submenu
-                    title={
-                      Option.isSome(file.publicLink)
-                        ? "Make a New Public Link"
-                        : "Create Public Link"
-                    }
+                    title={Option.isSome(file.publicLink) ? "Make a New Public Link" : "Create Public Link"}
                     icon={Icon.Link}
                     shortcut={{ modifiers: ["cmd"], key: "l" }}
                   >
@@ -322,10 +307,7 @@ function FileDetail({ file }: { readonly file: GrokFile }) {
         <List.Item.Detail.Metadata>
           <List.Item.Detail.Metadata.Label title="Name" text={file.filename} />
           <List.Item.Detail.Metadata.Label title="Size" text={sizeOf(file.bytes)} />
-          <List.Item.Detail.Metadata.Label
-            title="Uploaded"
-            text={dateFormat.format(file.createdAt)}
-          />
+          <List.Item.Detail.Metadata.Label title="Uploaded" text={dateFormat.format(file.createdAt)} />
           <List.Item.Detail.Metadata.Label
             title="Expires"
             text={Option.match(file.expiresAt, {
@@ -392,9 +374,7 @@ function UploadFile({ onUploaded }: { readonly onUploaded: () => void }) {
           catch: () => new MacError({ message: `Could not read ${filename}.` }),
         }).pipe(
           Effect.flatMap((bytes) =>
-            GrokFiles.use((files) =>
-              files.upload({ filename, bytes: new Uint8Array(bytes), expiresAfter }),
-            ),
+            GrokFiles.use((files) => files.upload({ filename, bytes: new Uint8Array(bytes), expiresAfter })),
           ),
           Effect.flatMap(() =>
             Effect.sync(() => {
@@ -466,9 +446,7 @@ const ErrorCode = Schema.Struct({ code: Schema.String })
 
 /** True when a failed write found a file already there. */
 const alreadyExists = (cause: unknown) =>
-  Schema.decodeUnknownOption(ErrorCode)(cause).pipe(
-    Option.exists((error) => error.code === "EEXIST"),
-  )
+  Schema.decodeUnknownOption(ErrorCode)(cause).pipe(Option.exists((error) => error.code === "EEXIST"))
 
 /** Tries before giving up on a free name. */
 const MAX_SAVE_ATTEMPTS = 100

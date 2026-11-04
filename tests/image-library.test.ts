@@ -33,10 +33,7 @@ const memoryFiles = () => {
   return { files, layer }
 }
 
-const run = <A, E>(
-  files: ReturnType<typeof memoryFiles>,
-  program: Effect.Effect<A, E, ImageLibrary>,
-) =>
+const run = <A, E>(files: ReturnType<typeof memoryFiles>, program: Effect.Effect<A, E, ImageLibrary>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(program),
@@ -57,8 +54,7 @@ const request = (prompt: string): ImageRequest => ({
   sources: [],
 })
 
-const image = (mimeType = "image/jpeg") =>
-  new GeneratedImage({ bytes: new Uint8Array([1, 2, 3]), mimeType })
+const image = (mimeType = "image/jpeg") => new GeneratedImage({ bytes: new Uint8Array([1, 2, 3]), mimeType })
 
 /** Add images one millisecond after the previous ones. */
 const add = (prompt: string, count = 1) =>
@@ -104,9 +100,7 @@ describe("ImageLibrary", () => {
     const [entry] = await run(
       files,
       ImageLibrary.use((library) =>
-        library.add(request("sky"), [
-          new GeneratedImage({ bytes: pngHeader(1280, 720), mimeType: "image/png" }),
-        ]),
+        library.add(request("sky"), [new GeneratedImage({ bytes: pngHeader(1280, 720), mimeType: "image/png" })]),
       ),
     )
 

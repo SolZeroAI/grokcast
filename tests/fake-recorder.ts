@@ -70,10 +70,7 @@ export const fakeRecorderLayer = (recorder: FakeRecorder) =>
             request: Effect.succeed(true),
           }),
         ),
-        Layer.succeed(
-          RecorderLauncher,
-          RecorderLauncher.of({ start: (_args, events) => recorder.start(events) }),
-        ),
+        Layer.succeed(RecorderLauncher, RecorderLauncher.of({ start: (_args, events) => recorder.start(events) })),
       ),
     ),
   )

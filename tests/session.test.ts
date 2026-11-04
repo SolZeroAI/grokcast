@@ -3,23 +3,9 @@ import { describe, it } from "node:test"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import * as Redacted from "effect/Redacted"
-import {
-  GrokSession,
-  NotSignedInError,
-  REFRESH_MARGIN_MS,
-  StoredTokens,
-  toStoredTokens,
-} from "../src/lib/session.ts"
-import {
-  endpoints,
-  fakeFetch,
-  formOf,
-  json,
-  memoryStore,
-  NOW,
-  run,
-  type MemoryStore,
-} from "./support.ts"
+import * as Predicate from "effect/Predicate"
+import { GrokSession, NotSignedInError, REFRESH_MARGIN_MS, StoredTokens, toStoredTokens } from "../src/lib/session.ts"
+import { endpoints, fakeFetch, formOf, json, memoryStore, NOW, run, type MemoryStore } from "./support.ts"
 
 const HOUR = 3_600_000
 
@@ -41,9 +27,7 @@ function plain(store: MemoryStore) {
   }))
 }
 
-const accessToken = GrokSession.use((session) => session.accessToken).pipe(
-  Effect.map(Redacted.value),
-)
+const accessToken = GrokSession.use((session) => session.accessToken).pipe(Effect.map(Redacted.value))
 
 describe("toStoredTokens", () => {
   const response = (refresh: Option.Option<string>) => ({
@@ -54,11 +38,7 @@ describe("toStoredTokens", () => {
   })
 
   it("stores the rotated refresh token", () => {
-    const stored = toStoredTokens(
-      response(Option.some("r2")),
-      NOW,
-      Option.some(tokens("a1", "r1", NOW)),
-    )
+    const stored = toStoredTokens(response(Option.some("r2")), NOW, Option.some(tokens("a1", "r1", NOW)))
 
     assert.equal(Redacted.value(stored.accessToken), "a2")
     assert.deepEqual(Option.map(stored.refreshToken, Redacted.value), Option.some("r2"))
@@ -66,11 +46,7 @@ describe("toStoredTokens", () => {
   })
 
   it("keeps the previous refresh token when the response has none", () => {
-    const stored = toStoredTokens(
-      response(Option.none()),
-      NOW,
-      Option.some(tokens("a1", "r1", NOW)),
-    )
+    const stored = toStoredTokens(response(Option.none()), NOW, Option.some(tokens("a1", "r1", NOW)))
 
     assert.deepEqual(Option.map(stored.refreshToken, Redacted.value), Option.some("r1"))
   })
@@ -87,9 +63,7 @@ describe("GrokSession.accessToken", () => {
   it("refreshes within five minutes of expiry and saves the rotated tokens", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW + REFRESH_MARGIN_MS - 1))
 
-    const fetch = fakeFetch(() =>
-      json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }),
-    )
+    const fetch = fakeFetch(() => json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }))
 
     assert.equal(await run(accessToken, fetch, store), "a2")
     assert.deepEqual(
@@ -110,9 +84,7 @@ describe("GrokSession.accessToken", () => {
   it("shares one refresh between concurrent callers", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW))
 
-    const fetch = fakeFetch(() =>
-      json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }),
-    )
+    const fetch = fakeFetch(() => json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }))
 
     const results = await run(
       Effect.all([accessToken, accessToken, accessToken], { concurrency: "unbounded" }),
@@ -149,7 +121,7 @@ describe("GrokSession.accessToken", () => {
     const store = memoryStore(tokens("a1", "r1", NOW))
     const fetch = fakeFetch(() => json({ error: "server_error" }, 503))
     const error = await run(Effect.flip(accessToken), fetch, store)
-    assert.equal(error._tag === "OAuthError" && error.code, "server_error")
+    assert.equal(Predicate.isTagged(error, "OAuthError") && error.code, "server_error")
     assert.equal(Option.getOrUndefined(plain(store))?.refreshToken, "r1")
   })
 })
@@ -181,11 +153,7 @@ describe("GrokSession.fetch", () => {
   it("accepts a Request, as the xAI SDK passes one", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW + HOUR))
     const fetch = fakeFetch(() => json({}))
-    await run(
-      sessionFetch(new Request("https://api.x.ai/v1/tts", { method: "POST", body: "{}" })),
-      fetch,
-      store,
-    )
+    await run(sessionFetch(new Request("https://api.x.ai/v1/tts", { method: "POST", body: "{}" })), fetch, store)
     assert.equal(fetch.requests[0]?.method, "POST")
     assert.equal(fetch.requests[0]?.headers.get("authorization"), "Bearer a1")
   })
@@ -203,11 +171,7 @@ describe("GrokSession.fetch", () => {
         : json({ error: "unauthorized" }, 401)
     })
 
-    const response = await run(
-      sessionFetch("https://api.x.ai/v1/stt", { method: "POST", body: "audio" }),
-      fetch,
-      store,
-    )
+    const response = await run(sessionFetch("https://api.x.ai/v1/stt", { method: "POST", body: "audio" }), fetch, store)
 
     assert.equal(response.status, 200)
     assert.deepEqual(

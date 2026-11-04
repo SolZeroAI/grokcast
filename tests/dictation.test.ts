@@ -25,11 +25,7 @@ import {
 } from "../src/lib/dictation.ts"
 import { DictationHistory } from "../src/lib/history.ts"
 import { joinChunks } from "../src/lib/recorder.ts"
-import {
-  LiveTranscriber,
-  LiveTranscript,
-  LiveTranscriptionError,
-} from "../src/lib/live-transcriber.ts"
+import { LiveTranscriber, LiveTranscript, LiveTranscriptionError } from "../src/lib/live-transcriber.ts"
 import { Transcriber, Transcript, type TranscribeOptions } from "../src/lib/transcriber.ts"
 import { chunk, FakeRecorder, fakeRecorderLayer } from "./fake-recorder.ts"
 
@@ -164,9 +160,7 @@ describe("recordSpeech", () => {
         yield* Deferred.succeed(stop, undefined)
 
         return yield* Fiber.join(fiber)
-      }).pipe(
-        Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer()))),
-      ),
+      }).pipe(Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer())))),
     )
 
     assert.deepEqual(recording.audio, chunk(1, 2, 3, 4))
@@ -182,17 +176,13 @@ describe("recordSpeech", () => {
       Effect.gen(function* () {
         const heard = yield* Deferred.make<void>()
 
-        const fiber = yield* Effect.forkChild(
-          recordSpeech(Effect.never, () => Deferred.doneUnsafe(heard, Effect.void)),
-        )
+        const fiber = yield* Effect.forkChild(recordSpeech(Effect.never, () => Deferred.doneUnsafe(heard, Effect.void)))
 
         yield* Deferred.await(heard)
         yield* TestClock.adjust("5 minutes")
 
         return yield* Fiber.join(fiber)
-      }).pipe(
-        Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer()))),
-      ),
+      }).pipe(Effect.provide(fakeRecorderLayer(recorder).pipe(Layer.provideMerge(TestClock.layer())))),
     )
 
     assert.deepEqual(recording.audio, chunk(1))
@@ -228,9 +218,7 @@ const fakeLive = (behavior: LiveBehavior) => {
                   return new LiveTranscript({ text, language: Option.some("fr") })
                 }),
               ),
-              Match.when({ kind: "fails" }, () =>
-                Effect.fail(new LiveTranscriptionError({ message: "dropped" })),
-              ),
+              Match.when({ kind: "fails" }, () => Effect.fail(new LiveTranscriptionError({ message: "dropped" }))),
               Match.orElse(() => Effect.never),
             ),
           ),
@@ -321,9 +309,7 @@ describe("dictateSpeech", () => {
       Option.map(transcript, (found) => [found.text, found.language, found.live]),
       Option.some(["From the recording.", Option.some("en"), false]),
     )
-    assert.deepEqual(batch, [
-      { bytes: 32_000, options: { language: Option.some("en"), formatNumbers: true } },
-    ])
+    assert.deepEqual(batch, [{ bytes: 32_000, options: { language: Option.some("en"), formatNumbers: true } }])
     assert.ok(events.includes("liveStopped"))
   })
 

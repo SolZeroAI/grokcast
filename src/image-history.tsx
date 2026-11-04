@@ -1,13 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  confirmAlert,
-  Grid,
-  Icon,
-  showToast,
-  Toast,
-} from "@raycast/api"
+import { Action, ActionPanel, Alert, confirmAlert, Grid, Icon, showToast, Toast } from "@raycast/api"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { useEffect, useState } from "react"
@@ -34,9 +25,7 @@ export default function ImageHistory() {
     GrokRuntime.runFork(
       program.pipe(
         Effect.andThen(Effect.sync(reload)),
-        Effect.catch(() =>
-          Effect.tryPromise(() => showToast({ style: Toast.Style.Failure, title: failure })),
-        ),
+        Effect.catch(() => Effect.tryPromise(() => showToast({ style: Toast.Style.Failure, title: failure }))),
         Effect.ignore,
       ),
     )

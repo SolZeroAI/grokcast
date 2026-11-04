@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net"
 import { describe, it } from "node:test"
 import * as Effect from "effect/Effect"
 import * as Socket from "effect/socket/Socket"
+import * as Predicate from "effect/Predicate"
 import { WebSocketServer } from "ws"
 import { WsWebSocketConstructor } from "../src/lib/live-transcriber.ts"
 
@@ -41,9 +42,6 @@ describe("WsWebSocketConstructor", () => {
     assert.deepEqual(outcome.first, ['{"type":"transcript.created"}'])
     assert.deepEqual(received, [{ authorization: "Bearer test", bytes: 3 }])
     assert.equal(outcome.closed.reason._tag, "SocketCloseError")
-    assert.equal(
-      outcome.closed.reason._tag === "SocketCloseError" ? outcome.closed.reason.code : 0,
-      1006,
-    )
+    assert.equal(Predicate.isTagged(outcome.closed.reason, "SocketCloseError") ? outcome.closed.reason.code : 0, 1006)
   })
 })

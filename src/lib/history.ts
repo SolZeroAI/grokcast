@@ -89,21 +89,11 @@ const makeHistory = Effect.fn("DictationHistory.make")(function* () {
 
   const clear = store.remove(KEY).pipe(Effect.withSpan("DictationHistory.clear"))
 
-  return DictationHistory.of({ list, add, remove, clear })
+  return { list, add, remove, clear }
 })
 
-export class DictationHistory extends Context.Service<
-  DictationHistory,
-  {
-    readonly list: Effect.Effect<ReadonlyArray<HistoryEntry>>
-    readonly add: (
-      dictation: NewEntry,
-    ) => Effect.Effect<HistoryEntry, KeyValueStore.KeyValueStoreError | Schema.SchemaError>
-    readonly remove: (
-      id: string,
-    ) => Effect.Effect<void, KeyValueStore.KeyValueStoreError | Schema.SchemaError>
-    readonly clear: Effect.Effect<void, KeyValueStore.KeyValueStoreError>
-  }
->()("grokcast/DictationHistory") {
-  static readonly layer = Layer.effect(DictationHistory, makeHistory())
+export class DictationHistory extends Context.Service<DictationHistory>()("grokcast/DictationHistory", {
+  make: makeHistory(),
+}) {
+  static readonly layer = Layer.effect(DictationHistory, DictationHistory.make)
 }

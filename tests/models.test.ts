@@ -22,10 +22,7 @@ const signedIn = () =>
     }),
   )
 
-const runCatalog = <A, E>(
-  fetch: FakeFetch,
-  use: (catalog: ModelCatalog["Service"]) => Effect.Effect<A, E>,
-) =>
+const runCatalog = <A, E>(fetch: FakeFetch, use: (catalog: ModelCatalog["Service"]) => Effect.Effect<A, E>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(ModelCatalog.use(use)),
@@ -116,9 +113,7 @@ describe("ModelCatalog.list", () => {
     assert.deepEqual(grok.aliases, ["grok-latest"])
     assert.equal(grok.created, 1_700_000_000_000)
     assert.deepEqual(models[1]?.maxPromptLength, Option.some(1024))
-    assert.ok(
-      fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"),
-    )
+    assert.ok(fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"))
   })
 
   it("still lists the models when the general list fails, without context lengths", async () => {

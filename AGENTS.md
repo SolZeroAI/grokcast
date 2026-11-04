@@ -11,7 +11,7 @@ This repository is Grokcast, a Raycast extension. Its Raycast Store title is "Gr
 
 - Use the user's xAI OAuth sign-in. Do not add an xAI API key option or a backend.
 - Keep `src/lib/` free of Raycast imports so unit tests run under plain Node.
-- Write code in idiomatic Effect v4. CONTRIBUTING.md lists the conventions. Fix Effect lint warnings in `src/` and `tests/` instead of disabling them.
+- Write code in idiomatic Effect v4. CONTRIBUTING.md lists the conventions. Lint uses `oxlint-plugin-solzero`. Fix lint errors instead of disabling them.
 - Do not add Alchemy, Cloudflare Workers, TanStack Start, Clerk, PlanetScale, drizzle, or turbo.
 - Unit tests use Node's test runner (`node --import tsx --test`). Do not add tester-army/e2e, Vitest, Jest, or Playwright.
 - Do not add ESLint or Prettier as dependencies. Lint and format are oxlint and oxfmt. `.prettierrc.json` only keeps the Raycast Store's Prettier check in agreement with oxfmt.

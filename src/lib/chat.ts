@@ -5,6 +5,7 @@
 import type { CreateParams, InputItem, ServerToolCall, Tool } from "@xai-official/sdk"
 import { codeExecution, webSearch, xSearch } from "@xai-official/sdk/tools"
 import * as Arr from "effect/Array"
+import * as Bool from "effect/Boolean"
 import * as Clock from "effect/Clock"
 import * as Context from "effect/Context"
 import * as Duration from "effect/Duration"
@@ -45,9 +46,7 @@ export class ChatSettings extends Schema.Class<ChatSettings>("ChatSettings")({
 }) {}
 
 /** The user's chat preferences. */
-export class ChatPreferences extends Context.Service<ChatPreferences, ChatSettings>()(
-  "grokcast/ChatPreferences",
-) {}
+export class ChatPreferences extends Context.Service<ChatPreferences, ChatSettings>()("grokcast/ChatPreferences") {}
 
 export class Citation extends Schema.Class<Citation>("Citation")({
   url: Schema.String,
@@ -74,6 +73,9 @@ export class ChatTurn extends Schema.Class<ChatTurn>("ChatTurn")({
   /** Paths of the images attached to the question. Added with image understanding. */
   images: Schema.OptionFromOptionalKey(Schema.Array(Schema.String)),
 }) {}
+
+/** `text`, unless it is empty. */
+const nonEmpty = Option.liftPredicate((text: string) => text !== "")
 
 /** The images attached to `turn`'s question. */
 export const imagesOf = (turn: ChatTurn): ReadonlyArray<string> =>
@@ -129,11 +131,7 @@ const turnInput = (turn: ChatTurn, loaded: LoadedImages): Array<InputItem> => [
 ]
 
 /** A question as plain text, or as text and images when it has readable images. */
-const questionInput = (
-  prompt: string,
-  images: ReadonlyArray<string>,
-  loaded: LoadedImages,
-): InputItem =>
+const questionInput = (prompt: string, images: ReadonlyArray<string>, loaded: LoadedImages): InputItem =>
   Arr.match(Arr.getSomes(Arr.map(images, (path) => Option.fromNullishOr(loaded.get(path)))), {
     onEmpty: () => ({ role: "user", content: prompt }),
     onNonEmpty: (blobs) => ({
@@ -181,16 +179,26 @@ export const toolLabel = (call: ServerToolCall): string =>
     Match.orElse(() => "Used a tool"),
   )
 
+/** `cut` up to its last space, when that space is in its second half. */
+const atWord = (cut: string, max: number): string =>
+  Option.match(
+    Option.liftPredicate(cut.lastIndexOf(" "), (space) => space > max / 2),
+    {
+      onNone: () => cut,
+      onSome: (space) => cut.slice(0, space),
+    },
+  )
+
+/** `line`, or its first `max` characters cut at a word, with an ellipsis. */
+const shorten = (line: string, max: number): string =>
+  Bool.match(line.length <= max, {
+    onTrue: () => line,
+    onFalse: () => `${atWord(line.slice(0, max), max).trimEnd()}…`,
+  })
+
 /** A conversation's title: the first line of its first question, cut at a word. */
-export const titleOf = (prompt: string, max = 60): string => {
-  const line = Option.getOrElse(Arr.head(prompt.trim().split("\n")), () => "").trim()
-
-  if (line.length <= max) return line
-  const cut = line.slice(0, max)
-  const space = cut.lastIndexOf(" ")
-
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
-}
+export const titleOf = (prompt: string, max = 60): string =>
+  shorten(Option.getOrElse(Arr.head(prompt.trim().split("\n")), () => "").trim(), max)
 
 /** The request body, with the user's model or `DEFAULT_CHAT_MODEL`. */
 export const requestOf = (
@@ -244,6 +252,7 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     return new Map([...Arr.getSomes(earlier), ...current])
   })
 
+  /** Ask Grok `prompt` after the turns in `context`, and stream the answer to `progress`. */
   const ask = Effect.fn("Chat.ask")(function* (
     prompt: string,
     context: AskContext,
@@ -258,45 +267,46 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     const startedAt = yield* Clock.currentTimeMillis
     const seen = { answer: "", citations: Arr.empty<Citation>(), tools: Arr.empty<string>() }
 
-    const response = yield* callXai(async (signal) => {
-      const stream = await client.responses.create(
-        { ...requestOf(settings, context, prompt, loaded), stream: true },
-        // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
-        { signal, maxRetries: 0, idleTimeout: Duration.toMillis(IDLE_TIMEOUT) },
-      )
+    const response = yield* callXai((signal) =>
+      client.responses
+        .create(
+          { ...requestOf(settings, context, prompt, loaded), stream: true },
+          // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
+          { signal, maxRetries: 0, idleTimeout: Duration.toMillis(IDLE_TIMEOUT) },
+        )
+        .then((stream) =>
+          stream
+            .on("reasoning", () => progress.thinking())
+            .on("text", (delta) => {
+              seen.answer += delta
+              progress.text(seen.answer)
+            })
+            .on("server_tool_call", (call) => {
+              const label = toolLabel(call)
 
-      return stream
-        .on("reasoning", () => progress.thinking())
-        .on("text", (delta) => {
-          seen.answer += delta
-          progress.text(seen.answer)
-        })
-        .on("server_tool_call", (call) => {
-          const label = toolLabel(call)
-
-          if (!seen.tools.includes(label)) seen.tools = Arr.append(seen.tools, label)
-          progress.tool(label)
-        })
-        .on("citation", (citation) => {
-          if (seen.citations.some((known) => known.url === citation.url)) return
-          seen.citations = Arr.append(
-            seen.citations,
-            new Citation({
-              url: citation.url,
-              title: Option.filter(Option.fromNullishOr(citation.title), (title) => title !== ""),
-            }),
-          )
-        })
-        .done()
-    }).pipe(
-      Effect.mapError((error) => {
-        const failure = describeXaiError(error, {
-          feature: "chat",
-          failed: "Grok could not answer",
-        })
-
-        return new ChatError({ reason: failure.reason, message: failure.message })
-      }),
+              // Each tool is listed once, where it first ran.
+              seen.tools = Arr.dedupe(Arr.append(seen.tools, label))
+              progress.tool(label)
+            })
+            .on("citation", (citation) => {
+              // Each URL is cited once, with the title it first came with.
+              seen.citations = Arr.dedupeWith(
+                Arr.append(
+                  seen.citations,
+                  new Citation({
+                    url: citation.url,
+                    title: Option.filter(Option.fromNullishOr(citation.title), (title) => title !== ""),
+                  }),
+                ),
+                (first, second) => first.url === second.url,
+              )
+            })
+            .done(),
+        ),
+    ).pipe(
+      Effect.mapError(
+        (error) => new ChatError(describeXaiError(error, { feature: "chat", failed: "Grok could not answer" })),
+      ),
     )
 
     const finishedAt = yield* Clock.currentTimeMillis
@@ -305,7 +315,7 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     return new ChatTurn({
       id: String(startedAt),
       prompt,
-      answer: answer === "" ? seen.answer.trim() : answer,
+      answer: Option.getOrElse(nonEmpty(answer), () => seen.answer.trim()),
       createdAt: startedAt,
       model: Option.filter(Option.fromNullishOr(response.model), (model) => model !== ""),
       seconds: (finishedAt - startedAt) / 1000,
@@ -319,37 +329,25 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     })
   })
 
-  return Chat.of({ ask })
+  return { ask }
 })
 
-export class Chat extends Context.Service<
-  Chat,
-  {
-    /** Ask Grok `prompt` after the turns in `context`, and stream the answer to `progress`. */
-    readonly ask: (
-      prompt: string,
-      context: AskContext,
-      settings: ChatSettings,
-      progress: ChatProgress,
-    ) => Effect.Effect<ChatTurn, ChatError>
-  }
->()("grokcast/Chat") {
-  static readonly layer = Layer.effect(Chat, makeChat())
+export class Chat extends Context.Service<Chat>()("grokcast/Chat", { make: makeChat() }) {
+  static readonly layer = Layer.effect(Chat, Chat.make)
 }
 
-/** A citation as a Markdown link, named by its title or its site. */
-const sourceLink = (citation: Citation): string => {
-  const name = Option.getOrElse(citation.title, () =>
+/** A citation's name: its title, or its site. */
+const sourceName = (citation: Citation): string =>
+  Option.getOrElse(citation.title, () =>
     Option.getOrElse(
-      Option.map(Option.liftThrowable(() => new URL(citation.url))(), (url) =>
-        url.hostname.replace(/^www\./, ""),
-      ),
+      Option.map(Option.liftThrowable(() => new URL(citation.url))(), (url) => url.hostname.replace(/^www\./, "")),
       () => citation.url,
     ),
   )
 
-  return `[${name.replaceAll("[", "(").replaceAll("]", ")")}](${citation.url})`
-}
+/** A citation as a Markdown link, named by its title or its site. */
+const sourceLink = (citation: Citation): string =>
+  `[${sourceName(citation).replaceAll("[", "(").replaceAll("]", ")")}](${citation.url})`
 
 /** Such as `grok-4.7 · 3.2 s · Searched the web`. */
 export const footerOf = (turn: ChatTurn): string =>
@@ -358,7 +356,10 @@ export const footerOf = (turn: ChatTurn): string =>
       ...Option.toArray(turn.model),
       `${turn.seconds.toFixed(1)} s`,
       ...turn.toolsUsed,
-      ...(turn.complete ? [] : ["The answer stopped early"]),
+      ...Bool.match(turn.complete, {
+        onTrue: () => [],
+        onFalse: () => ["The answer stopped early"],
+      }),
     ],
     " · ",
   )
@@ -369,7 +370,7 @@ export const turnMarkdown = (turn: ChatTurn): string =>
     [
       `**${turn.prompt.trim()}**`,
       ...Arr.map(imagesOf(turn), imageMarkdown),
-      turn.answer === "" ? "_Grok gave no answer._" : turn.answer,
+      Option.getOrElse(nonEmpty(turn.answer), () => "_Grok gave no answer._"),
       ...Arr.match(turn.citations, {
         onEmpty: () => [],
         onNonEmpty: (citations) => [

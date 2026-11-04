@@ -116,9 +116,7 @@ export const run = <A, E>(
   fetch: FakeFetch,
   store?: MemoryStore,
 ): Promise<A> =>
-  Effect.runPromise(
-    TestClock.setTime(NOW).pipe(Effect.andThen(program), Effect.provide(testLayer(fetch, store))),
-  )
+  Effect.runPromise(TestClock.setTime(NOW).pipe(Effect.andThen(program), Effect.provide(testLayer(fetch, store))))
 
 /** A PNG signature and IHDR chunk for a `width` by `height` image. */
 export const pngHeader = (width: number, height: number) => {

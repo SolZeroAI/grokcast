@@ -67,9 +67,7 @@ export default function Dictate() {
           RecorderError: (error) =>
             Effect.sync(() => setState(State.Failed({ message: error.message, signIn: false }))),
           TranscriptionError: (error) =>
-            Effect.sync(() =>
-              setState(State.Failed({ message: error.message, signIn: error.reason === "signIn" })),
-            ),
+            Effect.sync(() => setState(State.Failed({ message: error.message, signIn: error.reason === "signIn" }))),
         }),
       ),
     )
@@ -85,12 +83,7 @@ export default function Dictate() {
   }
 
   const againAction = (
-    <Action
-      title="Dictate Again"
-      icon={Icon.Microphone}
-      shortcut={{ modifiers: ["cmd"], key: "r" }}
-      onAction={again}
-    />
+    <Action title="Dictate Again" icon={Icon.Microphone} shortcut={{ modifiers: ["cmd"], key: "r" }} onAction={again} />
   )
 
   const historyAction = (
@@ -103,9 +96,7 @@ export default function Dictate() {
   )
 
   return State.$match(state, {
-    Starting: () => (
-      <Detail isLoading markdown="" metadata={<Status label="Starting the microphone" />} />
-    ),
+    Starting: () => <Detail isLoading markdown="" metadata={<Status label="Starting the microphone" />} />,
     Recording: ({ seconds, level, text, liveStopped }) => (
       <Detail
         isLoading
@@ -126,11 +117,7 @@ export default function Dictate() {
         }
         actions={
           <ActionPanel>
-            <Action
-              title="Stop and Transcribe"
-              icon={Icon.Stop}
-              onAction={() => stopRef.current()}
-            />
+            <Action title="Stop and Transcribe" icon={Icon.Stop} onAction={() => stopRef.current()} />
           </ActionPanel>
         }
       />
@@ -194,10 +181,7 @@ export default function Dictate() {
       <Detail
         markdown={message}
         metadata={
-          <Status
-            label="Dictation did not finish"
-            icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }}
-          />
+          <Status label="Dictation did not finish" icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }} />
         }
         actions={
           <ActionPanel>
@@ -240,10 +224,7 @@ function Status({
   )
 }
 
-const dictate = Effect.fn("dictate")(function* (
-  setState: (state: State) => void,
-  onStop: (stop: () => void) => void,
-) {
+const dictate = Effect.fn("dictate")(function* (setState: (state: State) => void, onStop: (stop: () => void) => void) {
   const settings = yield* DictationPreferences
 
   const stopped = Effect.callback<void>((resume) => {
@@ -266,9 +247,7 @@ const dictate = Effect.fn("dictate")(function* (
 
   const show = () => {
     const key = [
-      view.finishing
-        ? "finishing"
-        : `${levelBar(view.level, METER_STEPS)} ${clockOf(view.seconds)}`,
+      view.finishing ? "finishing" : `${levelBar(view.level, METER_STEPS)} ${clockOf(view.seconds)}`,
       view.text,
       view.liveStopped,
     ].join("|")
@@ -276,9 +255,7 @@ const dictate = Effect.fn("dictate")(function* (
     if (key === shown.key) return
     shown.key = key
     setState(
-      view.finishing
-        ? State.Finishing({ seconds: view.seconds, text: view.text })
-        : State.Recording({ ...view }),
+      view.finishing ? State.Finishing({ seconds: view.seconds, text: view.text }) : State.Recording({ ...view }),
     )
   }
 
@@ -336,9 +313,7 @@ const deliver = (dictation: Dictation, afterDictation: "paste" | "copy") =>
 const copy = (dictation: Dictation) =>
   Effect.tryPromise(() => Clipboard.copy(dictation.text)).pipe(
     // The text is on the clipboard even when the HUD cannot show.
-    Effect.andThen(
-      Effect.tryPromise(() => showHUD(`Copied ${summaryOf(dictation)}`)).pipe(Effect.ignore),
-    ),
+    Effect.andThen(Effect.tryPromise(() => showHUD(`Copied ${summaryOf(dictation)}`)).pipe(Effect.ignore)),
     Effect.as("copied" as const),
     // The text stays on screen, with Paste and Copy actions to try again.
     Effect.catch(() => Effect.succeed("notDelivered" as const)),

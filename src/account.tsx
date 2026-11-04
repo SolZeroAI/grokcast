@@ -71,9 +71,7 @@ export default function Account(props: LaunchProps) {
 
     const fiber = GrokRuntime.runFork(
       program.pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => setState(State.Failed({ message: describe(error), retry: task }))),
-        ),
+        Effect.catch((error) => Effect.sync(() => setState(State.Failed({ message: describe(error), retry: task })))),
         // A defect would otherwise leave the screen on "Checking…" with no way out.
         Effect.catchDefect((defect) =>
           Effect.sync(() => {
@@ -94,9 +92,7 @@ export default function Account(props: LaunchProps) {
     }
   }, [task])
 
-  const signInAction = (
-    <Action title="Sign In" icon={Icon.Person} onAction={() => setTask(Task.SignIn())} />
-  )
+  const signInAction = <Action title="Sign In" icon={Icon.Person} onAction={() => setTask(Task.SignIn())} />
 
   return State.$match(state, {
     Checking: () => <Detail isLoading markdown="" metadata={<Status label="Checking…" />} />,
@@ -156,10 +152,7 @@ export default function Account(props: LaunchProps) {
               onNone: () => null,
               onSome: (email) => <Detail.Metadata.Label title="Email" text={email} />,
             })}
-            <Detail.Metadata.Label
-              title="Sign-in Client"
-              text={customClient ? "Custom" : "Grok Build"}
-            />
+            <Detail.Metadata.Label title="Sign-in Client" text={customClient ? "Custom" : "Grok Build"} />
           </Status>
         }
         actions={
@@ -182,12 +175,7 @@ export default function Account(props: LaunchProps) {
     Failed: ({ message, retry }) => (
       <Detail
         markdown={message}
-        metadata={
-          <Status
-            label="Something went wrong"
-            icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }}
-          />
-        }
+        metadata={<Status label="Something went wrong" icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }} />}
         actions={
           <ActionPanel>
             <Action title="Try Again" icon={Icon.ArrowClockwise} onAction={() => setTask(retry)} />
@@ -245,9 +233,7 @@ const signIn = Effect.fn("signIn")(function* (setState: (state: State) => void) 
   const tokens = toStoredTokens(response, yield* Clock.currentTimeMillis, Option.none())
   yield* TokenStore.use((store) => store.save(tokens))
   setState(yield* signedIn(profileFromIdToken(tokens.idToken)))
-  yield* Effect.tryPromise(() =>
-    showToast({ style: Toast.Style.Success, title: "Signed in to Grok" }),
-  )
+  yield* Effect.tryPromise(() => showToast({ style: Toast.Style.Success, title: "Signed in to Grok" }))
 })
 
 const signOut = Effect.fn("signOut")(function* (setState: (state: State) => void) {

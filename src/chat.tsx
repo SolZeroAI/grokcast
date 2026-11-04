@@ -19,12 +19,7 @@ import * as Fiber from "effect/Fiber"
 import * as Option from "effect/Option"
 import { useEffect, useRef, useState } from "react"
 import { Chat, ChatPreferences, turnMarkdown, type ChatTurn } from "./lib/chat.ts"
-import {
-  ChatConversations,
-  newConversation,
-  withTurn,
-  type Conversation,
-} from "./lib/conversations.ts"
+import { ChatConversations, newConversation, withTurn, type Conversation } from "./lib/conversations.ts"
 import { GrokRuntime } from "./lib/grok.ts"
 import { imageMarkdown, isSupportedImage } from "./lib/chat-images.ts"
 import { signIn } from "./components/launch.tsx"
@@ -182,34 +177,27 @@ function ChatView({
         onSome: (current) => latestOf(saved, current),
       })
 
-      const turn = yield* chat.ask(
-        prompt,
-        { conversationId: base.id, history: base.turns, images },
-        settings,
-        {
-          thinking: () => {
-            if (view.answer !== "" || view.status === "Thinking") return
-            view.status = "Thinking"
-            showSoon()
-          },
-          tool: (label) => {
-            view.status = label
-            showSoon()
-          },
-          text: (answer) => {
-            view.status = "Answering"
-            view.answer = answer
-            showSoon()
-          },
+      const turn = yield* chat.ask(prompt, { conversationId: base.id, history: base.turns, images }, settings, {
+        thinking: () => {
+          if (view.answer !== "" || view.status === "Thinking") return
+          view.status = "Thinking"
+          showSoon()
         },
-      )
+        tool: (label) => {
+          view.status = label
+          showSoon()
+        },
+        text: (answer) => {
+          view.status = "Answering"
+          view.answer = answer
+          showSoon()
+        },
+      })
 
       const next = withTurn(base, turn)
       setConversation(Option.some(next))
       setSelected(Option.some(turn.id))
-      yield* saved
-        .save(next)
-        .pipe(Effect.catch(() => failureToast("Could not save the conversation")))
+      yield* saved.save(next).pipe(Effect.catch(() => failureToast("Could not save the conversation")))
     }).pipe(
       Effect.catchTag("ChatError", (error) =>
         Effect.sync(() => {
@@ -355,9 +343,7 @@ function ChatView({
   return (
     <List
       isLoading={asking}
-      isShowingDetail={
-        turns.length > 0 || asking || Option.isSome(failure) || attachments.length > 0
-      }
+      isShowingDetail={turns.length > 0 || asking || Option.isSome(failure) || attachments.length > 0}
       filtering={false}
       searchText={searchText}
       onSearchTextChange={setSearchText}
@@ -454,9 +440,7 @@ function ChatView({
             actions={
               <ActionPanel>
                 {askAction}
-                {current.signIn ? (
-                  <Action title="Sign in to Grok" icon={Icon.Person} onAction={signIn} />
-                ) : null}
+                {current.signIn ? <Action title="Sign in to Grok" icon={Icon.Person} onAction={signIn} /> : null}
                 <Action
                   title="Try Again"
                   icon={Icon.ArrowClockwise}
@@ -489,11 +473,7 @@ function ChatView({
               {Arr.match(turn.citations, {
                 onEmpty: () => null,
                 onNonEmpty: (citations) => (
-                  <ActionPanel.Submenu
-                    title="Open Source"
-                    icon={Icon.Globe}
-                    shortcut={Keyboard.Shortcut.Common.Open}
-                  >
+                  <ActionPanel.Submenu title="Open Source" icon={Icon.Globe} shortcut={Keyboard.Shortcut.Common.Open}>
                     {citations.map((citation) => (
                       <Action.OpenInBrowser
                         key={citation.url}
@@ -547,9 +527,7 @@ function ChooseImages({ onChoose }: { readonly onChoose: (paths: ReadonlyArray<s
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
 
 function ConversationsView() {
-  const [conversations, setConversations] = useState<Option.Option<ReadonlyArray<Conversation>>>(
-    Option.none(),
-  )
+  const [conversations, setConversations] = useState<Option.Option<ReadonlyArray<Conversation>>>(Option.none())
 
   const reload = () =>
     GrokRuntime.runFork(
@@ -617,9 +595,7 @@ function ConversationsView() {
           icon={Icon.SpeechBubble}
           accessories={[
             {
-              text: `${conversation.turns.length} ${
-                conversation.turns.length === 1 ? "question" : "questions"
-              }`,
+              text: `${conversation.turns.length} ${conversation.turns.length === 1 ? "question" : "questions"}`,
             },
             { text: dateFormat.format(conversation.updatedAt) },
           ]}

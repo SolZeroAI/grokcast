@@ -7,13 +7,7 @@ import * as Redacted from "effect/Redacted"
 import * as Schema from "effect/Schema"
 import * as TestClock from "effect/testing/TestClock"
 import { StoredTokens } from "../src/lib/session.ts"
-import {
-  ReferenceAudio,
-  updateLabels,
-  VoiceLabels,
-  VoiceLibrary,
-  wavOf,
-} from "../src/lib/voices.ts"
+import { ReferenceAudio, updateLabels, VoiceLabels, VoiceLibrary, wavOf } from "../src/lib/voices.ts"
 import { fakeFetch, json, memoryStore, NOW, testLayer, type FakeFetch } from "./support.ts"
 
 const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))
@@ -28,10 +22,7 @@ const signedIn = () =>
     }),
   )
 
-const runLibrary = <A, E>(
-  fetch: FakeFetch,
-  use: (library: VoiceLibrary["Service"]) => Effect.Effect<A, E>,
-) =>
+const runLibrary = <A, E>(fetch: FakeFetch, use: (library: VoiceLibrary["Service"]) => Effect.Effect<A, E>) =>
   Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(VoiceLibrary.use(use)),
@@ -94,9 +85,7 @@ describe("VoiceLibrary.list", () => {
     assert.deepEqual(newer.accent, Option.none())
     assert.deepEqual(newer.useCase, Option.some("narration"))
     assert.deepEqual(newer.created, Option.some(1_790_899_200_000))
-    assert.ok(
-      fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"),
-    )
+    assert.ok(fetch.requests.every((request) => request.headers.get("authorization") === "Bearer a1"))
   })
 
   it("explains a 403 as the plan", async () => {
@@ -121,10 +110,7 @@ describe("VoiceLibrary.create", () => {
     })
 
     const voice = await runLibrary(fetch, (library) =>
-      library.create(
-        new ReferenceAudio({ bytes: new Uint8Array([1, 2, 3]), filename: "clip.wav" }),
-        labels,
-      ),
+      library.create(new ReferenceAudio({ bytes: new Uint8Array([1, 2, 3]), filename: "clip.wav" }), labels),
     )
 
     assert.equal(voice.id, "v_1")
@@ -147,9 +133,7 @@ describe("VoiceLibrary.create", () => {
 
 describe("VoiceLibrary.update", () => {
   it("sends every label, with null to clear the empty ones", async () => {
-    const fetch = fakeFetch(() =>
-      Response.json(customVoice("v_1", "Renamed", "2026-10-26T00:00:00Z")),
-    )
+    const fetch = fakeFetch(() => Response.json(customVoice("v_1", "Renamed", "2026-10-26T00:00:00Z")))
 
     const labels = new VoiceLabels({ ...VoiceLabels.empty, name: Option.some("Renamed") })
     await runLibrary(fetch, (library) => library.update("v_1", labels))

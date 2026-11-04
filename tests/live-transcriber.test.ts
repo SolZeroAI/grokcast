@@ -36,20 +36,14 @@ const signedIn = () =>
 const speech = Stream.make(chunk(1, 2), chunk(3, 4))
 
 /** Run a live transcription against a fake xAI that follows `script`. */
-const transcribe = (
-  script: Script,
-  store: MemoryStore = signedIn(),
-  audio: Stream.Stream<Uint8Array> = speech,
-) => {
+const transcribe = (script: Script, store: MemoryStore = signedIn(), audio: Stream.Stream<Uint8Array> = speech) => {
   const xai = fakeLiveStt(script)
   const updates: Array<string> = []
 
   const result = Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(
-        LiveTranscriber.use((live) =>
-          live.transcribe(audio, Option.some("en"), (text) => updates.push(text)),
-        ),
+        LiveTranscriber.use((live) => live.transcribe(audio, Option.some("en"), (text) => updates.push(text))),
       ),
       Effect.result,
       Effect.provide(
@@ -130,11 +124,7 @@ describe("addPartial", () => {
   })
 
   it("keeps final pieces, then uses the utterance final, which restates them", () => {
-    const live = apply(
-      partial("Hello there.", true),
-      partial("How are"),
-      partial("How are you?", true),
-    )
+    const live = apply(partial("Hello there.", true), partial("How are"), partial("How are you?", true))
 
     assert.equal(textOf(live), "Hello there. How are you?")
     const finished = addPartial(live, decoded(partial("Hello there. How are you?", true, true)))
