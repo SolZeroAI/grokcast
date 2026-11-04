@@ -129,4 +129,50 @@ describe("ChatConversations", () => {
 
     assert.deepEqual(listed, [])
   })
+
+  it("continues from the open copy when saving its last answer failed", async () => {
+    const prompts = await run(
+      Effect.gen(function* () {
+        const saved = yield* ChatConversations
+        const first = withTurn(yield* newConversation, turnAt(NOW + 1000, "First"))
+        yield* saved.save(first)
+        // The second answer is on screen, but its save failed, so storage still has one turn.
+        const open = withTurn(first, turnAt(NOW + 5000, "Second"))
+        const latest = yield* saved.latest(open)
+
+        return latest.turns.map((turn) => turn.prompt)
+      }),
+    )
+
+    assert.deepEqual(prompts, ["First", "Second"])
+  })
+
+  it("continues from the saved copy when Show Conversations added turns to it", async () => {
+    const prompts = await run(
+      Effect.gen(function* () {
+        const saved = yield* ChatConversations
+        const open = withTurn(yield* newConversation, turnAt(NOW + 1000, "First"))
+        yield* saved.save(withTurn(open, turnAt(NOW + 5000, "From the list")))
+        const latest = yield* saved.latest(open)
+
+        return latest.turns.map((turn) => turn.prompt)
+      }),
+    )
+
+    assert.deepEqual(prompts, ["First", "From the list"])
+  })
+
+  it("continues from the open copy when the conversation is not saved", async () => {
+    const prompts = await run(
+      Effect.gen(function* () {
+        const saved = yield* ChatConversations
+        const open = withTurn(yield* newConversation, turnAt(NOW + 1000, "Only here"))
+        const latest = yield* saved.latest(open)
+
+        return latest.turns.map((turn) => turn.prompt)
+      }),
+    )
+
+    assert.deepEqual(prompts, ["Only here"])
+  })
 })
