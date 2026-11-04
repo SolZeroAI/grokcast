@@ -34,6 +34,7 @@ const turnAt = (createdAt: number, prompt: string) =>
     toolsUsed: [],
     complete: true,
     images: Option.none(),
+    steps: Option.none(),
   })
 
 const titles = ChatConversations.use((saved) => saved.list).pipe(

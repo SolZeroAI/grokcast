@@ -54,7 +54,9 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in 
 - Grok's tools are `webSearch()`, `xSearch()`, and `codeExecution()` from `@xai-official/sdk/tools`. xAI runs them; the extension only shows what they did (`toolLabel`) and the URL citations.
 - A 429 is not retried, because on a subscription it usually means the usage limit. Interrupting the fiber aborts the request.
 - Image understanding goes through the same request. `ChatImages` (`src/lib/chat-images.ts`) reads JPEG, PNG, or WebP files of up to 20 MB as `Blob`s, which the SDK sends as `input_image` data URLs. A turn saves only the image paths. Images on earlier turns are sent again when their files can still be read and are skipped when they cannot. An unreadable image on the new question fails it before anything is sent.
-- `src/chat.tsx` redraws a streaming answer at most every 150 ms, because Tinycast sends the whole view on every update.
+- `src/lib/chat-steps.ts` turns the stream into the steps Grok took, in order: thoughts (timed from the reasoning item's start to the next step, with any reasoning text xAI streams), searches (web searches in a row become one step with their queries and pages; X searches likewise), code runs, and other tools. A turn saves its steps; turns saved before this have none and still show their tools in the footer.
+- Site icons come from `https://www.google.com/s2/favicons`, the service Raycast's `getFavicon` uses. Only the domain is sent.
+- `src/chat.tsx` redraws a streaming answer at most every 150 ms, because Tinycast sends the whole view on every update. While Grok thinks, it redraws once a second so the "Thinking for 3 s" count moves.
 
 ## Live speech-to-text
 

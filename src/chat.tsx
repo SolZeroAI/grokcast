@@ -14,11 +14,25 @@ import {
   useNavigation,
 } from "@raycast/api"
 import * as Arr from "effect/Array"
+import * as DateTime from "effect/DateTime"
 import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
+import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import { useEffect, useRef, useState } from "react"
-import { Chat, ChatPreferences, turnMarkdown, type ChatTurn } from "./lib/chat.ts"
+import { Chat, ChatPreferences, sourceName, stepsOf, turnMarkdown, type ChatTurn, type Citation } from "./lib/chat.ts"
+import {
+  Activity,
+  emptyTrail,
+  faviconMarkdown,
+  faviconUrl,
+  pagesLabel,
+  siteOf,
+  stepTitle,
+  trailMarkdown,
+  type ChatStep,
+  type Trail,
+} from "./lib/chat-steps.ts"
 import { ChatConversations, newConversation, withTurn, type Conversation } from "./lib/conversations.ts"
 import { DictateAction } from "./components/dictation.tsx"
 import { appendDictation } from "./lib/dictation.ts"
@@ -34,8 +48,11 @@ export default function GrokChat() {
 interface Pending {
   readonly prompt: string
   readonly images: ReadonlyArray<string>
-  readonly status: string
+  /** What Grok has done so far, and what it is doing now. */
+  readonly trail: Trail
   readonly answer: string
+  /** When this was drawn, for "Thinking for 3 s". Unix time in milliseconds. */
+  readonly drawnAt: number
 }
 
 /** A question that got no answer. */
@@ -51,6 +68,11 @@ interface Failure {
  * on every update, so fewer updates keep it smooth.
  */
 const STREAM_REDRAW_MS = 150
+
+/** Redraw this often while Grok thinks, so "Thinking for 3 s" counts up. */
+const THINKING_TICK_MS = 1000
+
+const SHOW_STEPS: Keyboard.Shortcut = { modifiers: ["cmd"], key: "i" }
 
 const SHOW_CONVERSATIONS: Keyboard.Shortcut = { modifiers: ["cmd"], key: "y" }
 
@@ -137,13 +159,26 @@ function ChatView({
     setAttachments([])
     setFailure(Option.none())
     setSelected(Option.some("pending"))
-    const view = { prompt, status: "Waiting for Grok", answer: "", timer: false, done: false }
+    const view = { trail: emptyTrail, answer: "", timer: false, done: false }
 
     const show = () => {
       if (!view.done) {
-        setPending(Option.some({ prompt, images, status: view.status, answer: view.answer }))
+        setPending(
+          Option.some({
+            prompt,
+            images,
+            trail: view.trail,
+            answer: view.answer,
+            drawnAt: DateTime.toEpochMillis(DateTime.nowUnsafe()),
+          }),
+        )
       }
     }
+
+    // Count the thinking time up while nothing else arrives. Only the seconds change.
+    const ticker = setInterval(() => {
+      if (Option.exists(view.trail.active, Activity.$is("Thinking"))) show()
+    }, THINKING_TICK_MS)
 
     // Draw the newest text a moment later, once, however many pieces arrive meanwhile.
     const showSoon = () => {
@@ -169,17 +204,11 @@ function ChatView({
       })
 
       const turn = yield* chat.ask(prompt, { conversationId: base.id, history: base.turns, images }, settings, {
-        thinking: () => {
-          if (view.answer !== "" || view.status === "Thinking") return
-          view.status = "Thinking"
-          showSoon()
-        },
-        tool: (label) => {
-          view.status = label
+        steps: (trail) => {
+          view.trail = trail
           showSoon()
         },
         text: (answer) => {
-          view.status = "Answering"
           view.answer = answer
           showSoon()
         },
@@ -213,6 +242,7 @@ function ChatView({
       Effect.ensuring(
         Effect.sync(() => {
           view.done = true
+          clearInterval(ticker)
           fiber.current = Option.none()
           setPending(Option.none())
         }),
@@ -397,13 +427,7 @@ function ChatView({
             id="pending"
             title={current.prompt}
             icon={Icon.Hourglass}
-            detail={
-              <List.Item.Detail
-                markdown={`${questionMarkdown(current.prompt, current.images)}\n\n${
-                  current.answer === "" ? `_${current.status}…_` : current.answer
-                }`}
-              />
-            }
+            detail={<List.Item.Detail markdown={pendingMarkdown(current)} />}
             actions={
               <ActionPanel>
                 <Action
@@ -457,6 +481,14 @@ function ChatView({
               {askAction}
               <Action.CopyToClipboard title="Copy Answer" content={turn.answer} />
               <Action.Paste title="Paste Answer" content={turn.answer} />
+              {Arr.isReadonlyArrayNonEmpty(stepsOf(turn)) || turn.citations.length > 0 ? (
+                <Action.Push
+                  title="Show Steps and Sources"
+                  icon={Icon.List}
+                  shortcut={SHOW_STEPS}
+                  target={<StepsView turn={turn} />}
+                />
+              ) : null}
               <Action.CopyToClipboard
                 title="Copy Question"
                 content={turn.prompt}
@@ -482,6 +514,165 @@ function ChatView({
         />
       ))}
     </List>
+  )
+}
+
+/** The question, what Grok has done so far, and the answer as it streams. */
+const pendingMarkdown = (pending: Pending): string => {
+  const trail = trailMarkdown(pending.trail.steps, pending.trail.active, pending.drawnAt)
+  const waiting = Option.isNone(pending.trail.active) && pending.answer === ""
+
+  return [
+    questionMarkdown(pending.prompt, pending.images),
+    ...(trail === "" ? [] : [trail]),
+    ...(waiting ? ["_Waiting for Grok…_"] : []),
+    ...(pending.answer === "" ? [] : [pending.answer]),
+  ].join("\n\n")
+}
+
+/** A site's icon for a list item, with a globe until it loads or when there is none. */
+const siteIcon = (url: string) =>
+  Option.match(faviconUrl(url), {
+    onNone: () => Icon.Globe,
+    onSome: (source) => ({ source, fallback: Icon.Globe }),
+  })
+
+const stepIcon = (step: ChatStep) =>
+  Match.value(step).pipe(
+    Match.tagsExhaustive({
+      Thought: () => Icon.LightBulb,
+      Search: (search) => (search.tool === "x" ? Icon.Bird : Icon.MagnifyingGlass),
+      RanCode: () => Icon.Terminal,
+      UsedTool: () => Icon.Hammer,
+    }),
+  )
+
+const pageList = (pages: ReadonlyArray<string>) =>
+  pages.map((page, index) => `${index + 1}. ${faviconMarkdown(page)} [${siteOf(page)}](${page})`).join("\n")
+
+/** Everything a step has, for its detail pane. */
+const stepMarkdown = (step: ChatStep): string =>
+  Match.value(step).pipe(
+    Match.tagsExhaustive({
+      Thought: (thought) => (thought.text.trim() === "" ? "_Grok did not share what it thought here._" : thought.text),
+      Search: (search) =>
+        [
+          ...(search.queries.length > 0
+            ? [`**Searches**\n\n${search.queries.map((query) => `- ${query}`).join("\n")}`]
+            : []),
+          ...(search.pages.length > 0 ? [`**Pages**\n\n${pageList(search.pages)}`] : []),
+          ...(search.queries.length === 0 && search.pages.length === 0
+            ? ["_xAI did not say what Grok searched for._"]
+            : []),
+        ].join("\n\n"),
+      RanCode: (code) =>
+        [
+          `**Code**\n\n${fenced(code.code)}`,
+          ...(code.output.trim() === "" ? [] : [`**Output**\n\n${fenced(code.output)}`]),
+        ].join("\n\n"),
+      UsedTool: (tool) => `_${tool.label}._`,
+    }),
+  )
+
+/** `text` as a code block, fenced longer than any backtick run inside it. */
+const fenced = (text: string) => {
+  const fence = "`".repeat(Math.max(3, ...(text.match(/`+/g) ?? []).map((run) => run.length + 1)))
+
+  return `${fence}\n${text}\n${fence}`
+}
+
+const searchCount = (count: number) => `${count} ${count === 1 ? "search" : "searches"}`
+
+const stepSubtitle = (step: ChatStep): string =>
+  Match.value(step).pipe(
+    Match.tag("Search", (search) =>
+      [
+        ...(search.queries.length > 0 ? [searchCount(search.queries.length)] : []),
+        ...(search.pages.length > 0 ? [pagesLabel(search.pages.length)] : []),
+      ].join(", "),
+    ),
+    Match.orElse(() => ""),
+  )
+
+const stepKeywords = (step: ChatStep): Array<string> =>
+  Match.value(step).pipe(
+    Match.tag("Search", (search) => [...search.queries]),
+    Match.orElse(() => []),
+  )
+
+/** What a step offers: open the pages it read, or copy its thinking or code. */
+function StepActions({ step }: { readonly step: ChatStep }) {
+  return Match.value(step).pipe(
+    Match.tagsExhaustive({
+      Search: (search) =>
+        search.pages.length > 0 ? (
+          <ActionPanel.Submenu title="Open Page" icon={Icon.Globe}>
+            {search.pages.map((page) => (
+              <Action.OpenInBrowser key={page} title={siteOf(page)} icon={siteIcon(page)} url={page} />
+            ))}
+          </ActionPanel.Submenu>
+        ) : null,
+      Thought: (thought) =>
+        thought.text.trim() === "" ? null : <Action.CopyToClipboard title="Copy Thinking" content={thought.text} />,
+      RanCode: (code) => <Action.CopyToClipboard title="Copy Code" content={code.code} />,
+      UsedTool: () => null,
+    }),
+  )
+}
+
+/** Grok's steps for one answer, in order, each with its detail, then the sources it cites. */
+function StepsView({ turn }: { readonly turn: ChatTurn }) {
+  const steps = stepsOf(turn)
+
+  return (
+    <List isShowingDetail navigationTitle="Steps and Sources" searchBarPlaceholder="Filter steps and sources">
+      <List.EmptyView
+        icon={Icon.List}
+        title="No steps"
+        description="Grok answered without thinking out loud, searching, or citing sources."
+      />
+      <List.Section title="Steps">
+        {steps.map((step, index) => (
+          <List.Item
+            key={`step-${index}`}
+            title={stepTitle(step)}
+            subtitle={stepSubtitle(step)}
+            icon={stepIcon(step)}
+            keywords={stepKeywords(step)}
+            detail={<List.Item.Detail markdown={stepMarkdown(step)} />}
+            actions={
+              <ActionPanel>
+                <StepActions step={step} />
+              </ActionPanel>
+            }
+          />
+        ))}
+      </List.Section>
+      <List.Section title="Sources">
+        {turn.citations.map((citation) => (
+          <SourceItem key={citation.url} citation={citation} />
+        ))}
+      </List.Section>
+    </List>
+  )
+}
+
+function SourceItem({ citation }: { readonly citation: Citation }) {
+  const name = sourceName(citation)
+
+  return (
+    <List.Item
+      title={name}
+      subtitle={siteOf(citation.url)}
+      icon={siteIcon(citation.url)}
+      detail={<List.Item.Detail markdown={`**${name}**\n\n[${citation.url}](${citation.url})`} />}
+      actions={
+        <ActionPanel>
+          <Action.OpenInBrowser url={citation.url} />
+          <Action.CopyToClipboard title="Copy Link" content={citation.url} shortcut={Keyboard.Shortcut.Common.Copy} />
+        </ActionPanel>
+      }
+    />
   )
 }
 

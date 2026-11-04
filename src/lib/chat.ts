@@ -2,7 +2,7 @@
 // with Grok's own web search, X search, and code execution when the user turns them
 // on, and with images the user attaches. No Raycast imports, so tests run it under plain Node with a fake `fetch`.
 
-import type { CreateParams, InputItem, ServerToolCall, Tool } from "@xai-official/sdk"
+import type { CreateParams, InputItem, OutputItem, ServerToolCall, Tool } from "@xai-official/sdk"
 import { codeExecution, webSearch, xSearch } from "@xai-official/sdk/tools"
 import * as Arr from "effect/Array"
 import * as Bool from "effect/Boolean"
@@ -15,6 +15,20 @@ import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
 import { ChatImages, imageMarkdown } from "./chat-images.ts"
+import {
+  ChatStep,
+  emptyTrail,
+  escapeLabel,
+  faviconMarkdown,
+  finishTool,
+  serverToolCall,
+  settle,
+  siteOf,
+  startTool,
+  think,
+  trailMarkdown,
+  type Trail,
+} from "./chat-steps.ts"
 import { callXai, describeXaiError, XaiClient, XaiFailureReason } from "./xai.ts"
 
 /** How long Grok may go without sending anything while it answers. Reasoning can be quiet for a while. */
@@ -72,6 +86,8 @@ export class ChatTurn extends Schema.Class<ChatTurn>("ChatTurn")({
   complete: Schema.Boolean,
   /** Paths of the images attached to the question. Added with image understanding. */
   images: Schema.OptionFromOptionalKey(Schema.Array(Schema.String)),
+  /** What Grok did before it answered, in order. Added with the steps view; older turns have none. */
+  steps: Schema.OptionFromOptionalKey(Schema.Array(ChatStep)),
 }) {}
 
 /** `text`, unless it is empty. */
@@ -81,6 +97,10 @@ const nonEmpty = Option.liftPredicate((text: string) => text !== "")
 export const imagesOf = (turn: ChatTurn): ReadonlyArray<string> =>
   Option.getOrElse(turn.images, (): ReadonlyArray<string> => [])
 
+/** What Grok did before it answered `turn`. */
+export const stepsOf = (turn: ChatTurn): ReadonlyArray<ChatStep> =>
+  Option.getOrElse(turn.steps, (): ReadonlyArray<ChatStep> => [])
+
 /** Chat failed. `reason` picks what the UI offers, `message` is for the user. */
 export class ChatError extends Schema.TaggedError<ChatError>()("ChatError", {
   reason: XaiFailureReason,
@@ -89,10 +109,8 @@ export class ChatError extends Schema.TaggedError<ChatError>()("ChatError", {
 
 /** What `ask` reports while Grok answers. */
 export interface ChatProgress {
-  /** Grok is reasoning before it answers. */
-  readonly thinking: () => void
-  /** One of Grok's tools ran, such as "Searched the web". */
-  readonly tool: (label: string) => void
+  /** What Grok has done so far, and what it is doing now, such as thinking or searching the web. */
+  readonly steps: (trail: Trail) => void
   /** The whole answer so far. */
   readonly text: (answer: string) => void
 }
@@ -264,8 +282,22 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     )
 
     const loaded = yield* loadImages(context)
-    const startedAt = yield* Clock.currentTimeMillis
-    const seen = { answer: "", citations: Arr.empty<Citation>(), tools: Arr.empty<string>() }
+    const clock = yield* Clock.Clock
+    const startedAt = clock.currentTimeMillisUnsafe()
+    const seen = { answer: "", citations: Arr.empty<Citation>(), tools: Arr.empty<string>(), trail: emptyTrail }
+
+    /** Keep the trail's next state and report it, unless nothing changed. */
+    const step = (next: Trail) =>
+      Option.map(
+        Option.liftPredicate(next, (changed) => changed !== seen.trail),
+        (changed) => {
+          seen.trail = changed
+          progress.steps(changed)
+        },
+      )
+
+    /** Reasoning starts and ends as its own output item. */
+    const isReasoning = (item: OutputItem) => item.type === "reasoning"
 
     const response = yield* callXai((signal) =>
       client.responses
@@ -276,8 +308,20 @@ const makeChat = Effect.fn("Chat.make")(function* () {
         )
         .then((stream) =>
           stream
-            .on("reasoning", () => progress.thinking())
+            .on("reasoning", (delta) => step(think(seen.trail, delta, clock.currentTimeMillisUnsafe())))
+            .on("response.output_item.added", (event) => {
+              const now = clock.currentTimeMillisUnsafe()
+
+              Option.map(Option.liftPredicate(event.item, isReasoning), () => step(think(seen.trail, "", now)))
+              Option.map(serverToolCall(event.item), (call) => step(startTool(seen.trail, call, now)))
+            })
+            .on("response.output_item.done", (event) => {
+              Option.map(Option.liftPredicate(event.item, isReasoning), () =>
+                step(settle(seen.trail, clock.currentTimeMillisUnsafe())),
+              )
+            })
             .on("text", (delta) => {
+              step(settle(seen.trail, clock.currentTimeMillisUnsafe()))
               seen.answer += delta
               progress.text(seen.answer)
             })
@@ -286,7 +330,7 @@ const makeChat = Effect.fn("Chat.make")(function* () {
 
               // Each tool is listed once, where it first ran.
               seen.tools = Arr.dedupe(Arr.append(seen.tools, label))
-              progress.tool(label)
+              step(finishTool(seen.trail, call, clock.currentTimeMillisUnsafe()))
             })
             .on("citation", (citation) => {
               // Each URL is cited once, with the title it first came with.
@@ -309,7 +353,8 @@ const makeChat = Effect.fn("Chat.make")(function* () {
       ),
     )
 
-    const finishedAt = yield* Clock.currentTimeMillis
+    const finishedAt = clock.currentTimeMillisUnsafe()
+    const steps = settle(seen.trail, finishedAt).steps
     const answer = response.toText().trim()
 
     return new ChatTurn({
@@ -326,6 +371,10 @@ const makeChat = Effect.fn("Chat.make")(function* () {
         onEmpty: () => Option.none(),
         onNonEmpty: (images) => Option.some(images),
       }),
+      steps: Arr.match(steps, {
+        onEmpty: () => Option.none(),
+        onNonEmpty: (all) => Option.some(all),
+      }),
     })
   })
 
@@ -337,25 +386,28 @@ export class Chat extends Context.Service<Chat>()("grokcast/Chat", { make: makeC
 }
 
 /** A citation's name: its title, or its site. */
-const sourceName = (citation: Citation): string =>
-  Option.getOrElse(citation.title, () =>
-    Option.getOrElse(
-      Option.map(Option.liftThrowable(() => new URL(citation.url))(), (url) => url.hostname.replace(/^www\./, "")),
-      () => citation.url,
-    ),
+export const sourceName = (citation: Citation): string => Option.getOrElse(citation.title, () => siteOf(citation.url))
+
+/** A citation as a Markdown link after its site's icon. */
+const sourceLink = (citation: Citation): string =>
+  Arr.join(
+    [
+      ...Arr.filter([faviconMarkdown(citation.url)], (icon) => icon !== ""),
+      `[${escapeLabel(sourceName(citation))}](${citation.url})`,
+    ],
+    " ",
   )
 
-/** A citation as a Markdown link, named by its title or its site. */
-const sourceLink = (citation: Citation): string =>
-  `[${sourceName(citation).replaceAll("[", "(").replaceAll("]", ")")}](${citation.url})`
-
-/** Such as `grok-4.7 · 3.2 s · Searched the web`. */
+/**
+ * Such as `grok-4.7 · 3.2 s`. A turn saved before steps were kept also lists its tools,
+ * such as `Searched the web`; newer turns show them in the steps above the answer.
+ */
 export const footerOf = (turn: ChatTurn): string =>
   Arr.join(
     [
       ...Option.toArray(turn.model),
       `${turn.seconds.toFixed(1)} s`,
-      ...turn.toolsUsed,
+      ...Option.match(turn.steps, { onNone: () => turn.toolsUsed, onSome: (): ReadonlyArray<string> => [] }),
       ...Bool.match(turn.complete, {
         onTrue: () => [],
         onFalse: () => ["The answer stopped early"],
@@ -364,12 +416,13 @@ export const footerOf = (turn: ChatTurn): string =>
     " · ",
   )
 
-/** A turn for the detail pane: the question, the answer, its sources, and a footer. */
+/** A turn for the detail pane: the question, Grok's steps, the answer, its sources, and a footer. */
 export const turnMarkdown = (turn: ChatTurn): string =>
   Arr.join(
     [
       `**${turn.prompt.trim()}**`,
       ...Arr.map(imagesOf(turn), imageMarkdown),
+      ...Arr.filter([trailMarkdown(stepsOf(turn))], (trail) => trail !== ""),
       Option.getOrElse(nonEmpty(turn.answer), () => "_Grok gave no answer._"),
       ...Arr.match(turn.citations, {
         onEmpty: () => [],
