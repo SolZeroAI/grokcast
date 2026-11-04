@@ -151,8 +151,9 @@ const stage = Effect.fn("store.stage")(function* () {
 })
 
 const check = Effect.fn("store.check")(function* () {
-  yield* run("npx", ["ray", "build"])
-  yield* run("npx", ["ray", "lint"])
+  // --non-interactive lets the same check run in CI.
+  yield* run("npx", ["ray", "build", "--non-interactive"])
+  yield* run("npx", ["ray", "lint", "--non-interactive"])
   yield* run("git", ["ls-files"])
 })
 
