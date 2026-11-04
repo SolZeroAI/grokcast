@@ -21,10 +21,13 @@ concurrency:
   group: validate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The Tegami version pull request changes only release files, and the pull requests it
+# releases already ran CI. Every job skips on it. It is known by its branch and the
+# release GitHub App that opens it.
 jobs:
   validate:
     name: Typecheck, lint, format, and test
-    if: github.event.pull_request.draft != true
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'tegami/version-packages' && github.event.pull_request.user.login == 'solzero-bot[bot]') && github.event.pull_request.draft != true }}
     # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
     runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 15
@@ -62,7 +65,7 @@ jobs:
 
   changes:
     name: Detect build changes
-    if: github.event.pull_request.draft != true
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'tegami/version-packages' && github.event.pull_request.user.login == 'solzero-bot[bot]') && github.event.pull_request.draft != true }}
     # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
     runs-on: [self-hosted, arm64, linux]
     timeout-minutes: 5
