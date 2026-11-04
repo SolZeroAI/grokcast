@@ -19,7 +19,8 @@
     "format:fix": "oxfmt",
     "lint": "NODE_OPTIONS='--import tsx' oxlint --deny-warnings",
     "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
-    "publish": "npx @raycast/api@latest publish",
+    "publish": "tsx scripts/store-publish.mts --publish",
+    "store:check": "tsx scripts/store-publish.mts",
     "tegami": "tsx scripts/tegami.mts",
     "test": "node --import tsx --test 'tests/**/*.test.ts'",
     "typecheck": "tsrs --noEmit"
