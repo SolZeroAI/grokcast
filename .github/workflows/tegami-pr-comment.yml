@@ -12,6 +12,11 @@ permissions:
   contents: read
   pull-requests: write
 
+# A new push replaces the preview, so it cancels the older run.
+concurrency:
+  group: tegami-pr-comment-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
 jobs:
   comment:
     name: Post release preview
