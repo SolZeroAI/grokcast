@@ -10,8 +10,6 @@ import {
   Form,
   Grid,
   Icon,
-  launchCommand,
-  LaunchType,
   showHUD,
   showToast,
   Toast,
@@ -40,6 +38,7 @@ import {
   SourceImage,
   type ImageRequest,
 } from "../lib/images.ts"
+import { openCommand, SignInAction } from "./launch.tsx"
 
 /** Dropdown value for "let xAI choose". */
 const XAI_DEFAULT = "default"
@@ -100,6 +99,7 @@ export const libraryAspect = (entries: ReadonlyArray<ImageEntry>): Grid.AspectRa
     new Map<AspectRatio, number>(),
     (map, ratio) => map.set(ratio, (map.get(ratio) ?? 0) + 1),
   )
+
   return gridAspect(
     Option.map(
       Arr.head(
@@ -192,26 +192,37 @@ export function ImageForm({
 
   const submit = (values: Form.Values) => {
     const draft = draftOf(values)
+
     if (Option.isNone(draft)) {
       return
     }
+
     const { prompt, sources } = draft.value
+
     if (prompt === "") {
       setPromptError(Option.some("Describe the image"))
+
       return
     }
+
     if (edit && sources.length === 0) {
       setSourcesError(Option.some("Choose an image to edit"))
+
       return
     }
+
     if (sources.length > MAX_SOURCE_IMAGES) {
       setSourcesError(Option.some(`Choose up to ${MAX_SOURCE_IMAGES} images`))
+
       return
     }
+
     if (!Arr.every(sources, isEditableImage)) {
       setSourcesError(Option.some("Choose JPEG, PNG, or WebP images"))
+
       return
     }
+
     push(<ImageResults draft={draft.value} />)
   }
 
@@ -284,6 +295,7 @@ type State = Data.TaggedEnum<{
   Done: { readonly entries: ReadonlyArray<ImageEntry> }
   Failed: { readonly message: string; readonly signIn: boolean }
 }>
+
 const State = Data.taggedEnum<State>()
 
 const create = (draft: ImageDraft) =>
@@ -291,6 +303,7 @@ const create = (draft: ImageDraft) =>
     const sources = yield* Effect.forEach(draft.sources, readSource)
     const request: ImageRequest = { ...draft, sources }
     const images = yield* ImageGenerator.use((generator) => generator.create(request))
+
     return yield* ImageLibrary.use((library) => library.add(request, images)).pipe(
       Effect.mapError(
         () =>
@@ -316,6 +329,7 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
         ),
       ),
     )
+
     return () => {
       GrokRuntime.runFork(Fiber.interrupt(fiber))
     }
@@ -344,7 +358,7 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
       </Grid>
     ),
     Failed: ({ message, signIn }) => (
-      <Grid columns={2}>
+      <Grid columns={2} searchBarPlaceholder={draft.prompt}>
         <Grid.EmptyView
           icon={Icon.ExclamationMark}
           title={editing ? "The image was not edited" : "The image was not made"}
@@ -375,10 +389,9 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
                 <Action
                   title="Open Image History"
                   icon={Icon.Clock}
-                  shortcut={{ modifiers: ["cmd"], key: "y" }}
-                  onAction={() =>
-                    void launchCommand({ name: "image-history", type: LaunchType.UserInitiated })
-                  }
+                  // ⌘Y is Quick Look on the same image.
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "y" }}
+                  onAction={() => void openCommand("image-history")}
                 />
               </>
             }
@@ -387,22 +400,6 @@ export function ImageResults({ draft }: { readonly draft: ImageDraft }) {
       </Grid>
     ),
   })
-}
-
-function SignInAction() {
-  return (
-    <Action
-      title="Sign in to Grok"
-      icon={Icon.Person}
-      onAction={() =>
-        void launchCommand({
-          name: "account",
-          type: LaunchType.UserInitiated,
-          context: { signIn: true },
-        })
-      }
-    />
-  )
 }
 
 const AGAIN_SHORTCUT: Keyboard.Shortcut = { modifiers: ["cmd"], key: "r" }

@@ -2,8 +2,6 @@ import {
   Clipboard,
   closeMainWindow,
   getSelectedText,
-  launchCommand,
-  LaunchType,
   showHUD,
   showToast,
   Toast,
@@ -13,6 +11,7 @@ import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import { GrokRuntime } from "./lib/grok.ts"
 import { firstText, readAloud, ReadAloudResult } from "./lib/read-aloud.ts"
+import { signIn as openSignIn } from "./components/launch.tsx"
 
 /** Raycast passes an empty string when the optional argument is left empty. */
 interface ReadAloudArguments {
@@ -37,9 +36,7 @@ const ui = <A,>(show: () => Promise<A>) => Effect.tryPromise(show).pipe(Effect.i
 
 const hud = (title: string) => ui(() => showHUD(title))
 
-const signIn = ui(() =>
-  launchCommand({ name: "account", type: LaunchType.UserInitiated, context: { signIn: true } }),
-)
+const signIn = ui(openSignIn)
 
 const failure = (message: string) =>
   ui(() => showToast({ style: Toast.Style.Failure, title: "Could Not Read Aloud", message }))

@@ -23,6 +23,7 @@ export class ModelsError extends Schema.TaggedError<ModelsError>()("ModelsError"
 
 /** What a model makes. */
 export const ModelKind = Schema.Literals(["language", "image", "video"])
+
 export type ModelKind = typeof ModelKind.Type
 
 /** One Grok model, as xAI describes it. Prices are left out: a subscription does not pay per token. */
@@ -107,6 +108,7 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
   const sdk = client.pipe(
     Effect.mapError((error) => new ModelsError({ reason: "failed", message: error.message })),
   )
+
   const options = (signal: AbortSignal) => ({
     signal,
     maxRetries: 0,
@@ -116,6 +118,7 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
   const list = Effect.gen(function* () {
     const xai = yield* sdk
     const failed = toModelsError("xAI could not list the models")
+
     const [language, image, video, contextLengths] = yield* Effect.all(
       [
         callXai((signal) => xai.models.language.list(options(signal))).pipe(
@@ -141,6 +144,7 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
       ],
       { concurrency: "unbounded" },
     )
+
     return Arr.sort(
       [
         ...Arr.map(language.models, (model) => fromLanguageModel(model, contextLengths)),
@@ -153,9 +157,11 @@ const makeCatalog = Effect.fn("ModelCatalog.make")(function* () {
 
   const tokenize = Effect.fn("ModelCatalog.tokenize")(function* (model: string, text: string) {
     const xai = yield* sdk
+
     const result = yield* callXai((signal) =>
       xai.tokenizer.encode({ model, text }, options(signal)),
     ).pipe(Effect.mapError(toModelsError("xAI could not count the tokens")))
+
     return Arr.map(
       result.token_ids,
       (token) => new Token({ id: token.token_id, text: token.string_token }),

@@ -48,7 +48,7 @@ Requests to xAI go through `@xai-official/sdk` (pinned exactly). `XaiClient` in 
 
 `Chat` in `src/lib/chat.ts` streams answers from the Responses API (`client.responses.create` with `stream: true`) through `XaiClient`. `ChatConversations` in `src/lib/conversations.ts` keeps saved conversations in the `KeyValueStore`.
 
-- The request leaves out `model` unless the user sets one in the command preferences, so xAI's default model and its upgrades apply. The SDK's type requires `model`, but the API does not; `requestOf` has the one type assertion.
+- The request sends the model from the command preferences, or `DEFAULT_CHAT_MODEL` (`grok-4.7`) when that is empty.
 - `store` stays `false` (the SDK default). Each new question resends the earlier turns as plain user and assistant messages, so a saved conversation continues the same way. Reasoning state is not carried between turns.
 - `prompt_cache_key` is `grokcast-chat:<conversation id>`, so the turns of one conversation share xAI's prompt cache.
 - Grok's tools are `webSearch()`, `xSearch()`, and `codeExecution()` from `@xai-official/sdk/tools`. xAI runs them; the extension only shows what they did (`toolLabel`) and the URL citations.
@@ -142,7 +142,7 @@ When a pull request does not change the extension, add the `release:none` label 
 
 `.github/workflows/release.yml` runs after Validate passes on `master`. It needs the `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` secrets (org-level, shared release app). It opens the `tegami/version-packages` pull request, and after that merges, `scripts/github-release.mts` creates the GitHub release and the `grokcast@x.y.z` tag. The extension is private and is not published to npm.
 
-Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - YYYY-MM-DD` for the first release, then `## [x.y.z] - YYYY-MM-DD`, with one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
+Tegami writes `CHANGELOG.md` in the format the Raycast Store reads: `## [Initial Version] - {PR_MERGE_DATE}` for the first release, then `## [x.y.z] - {PR_MERGE_DATE}`. Raycast replaces `{PR_MERGE_DATE}` with the date it merges the Store pull request. Each entry has one `###` section for each `.tegami/` entry. Do not edit `CHANGELOG.md` by hand.
 
 ### Raycast Store submission
 

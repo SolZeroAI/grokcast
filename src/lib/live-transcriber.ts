@@ -40,14 +40,17 @@ export const toFrames: <E, R>(
   (pending: Uint8Array, chunk: Uint8Array) => {
     const joined = joinChunks([pending, chunk])
     const whole = joined.byteLength - (joined.byteLength % FRAME_BYTES)
+
     const frames = Array.from({ length: whole / FRAME_BYTES }, (_, index) =>
       joined.slice(index * FRAME_BYTES, (index + 1) * FRAME_BYTES),
     )
+
     return [joined.slice(whole), frames] as const
   },
   {
     onHalt: (pending) => {
       const samples = pending.byteLength - (pending.byteLength % BYTES_PER_SAMPLE)
+
       return samples > 0 ? [pending.slice(0, samples)] : []
     },
   },
@@ -72,6 +75,7 @@ export const liveSttUrl = (language: Option.Option<string>): string => {
   url.searchParams.set("interim_results", "true")
   url.searchParams.set("endpointing", String(ENDPOINTING_MS))
   Option.map(language, (code) => url.searchParams.set("language", code))
+
   return url.toString()
 }
 
@@ -95,6 +99,7 @@ export const Partial = Schema.Struct({
   /** The language xAI hears, such as `en`. */
   language: Schema.OptionFromOptionalKey(Schema.String),
 })
+
 export type Partial = typeof Partial.Type
 
 /** The last event. Its text has come back empty, so the text comes from the partials. */
@@ -103,6 +108,7 @@ const Done = Schema.Struct({ type: Schema.Literal("transcript.done"), text: Sche
 const ServerFailure = Schema.Struct({ type: Schema.Literal("error"), message: Schema.String })
 
 const ServerEvent = Schema.Union([Created, Partial, Done, ServerFailure])
+
 type ServerEvent = typeof ServerEvent.Type
 
 const decodeEvent = Schema.decodeUnknownOption(Schema.fromJsonString(ServerEvent))
@@ -145,9 +151,11 @@ export const addPartial = (previous: LiveText, partial: Partial): LiveText => {
       () => previous.language,
     ),
   })
+
   return Match.value(partial).pipe(
     Match.when({ speech_final: true }, () => {
       const utterance = partial.text.trim() === "" ? joinWords(live.pieces) : partial.text
+
       return new LiveText({
         ...live,
         utterances: Arr.append(live.utterances, utterance),
@@ -192,10 +200,12 @@ const makeLiveTranscriber = Effect.fn("LiveTranscriber.make")(function* () {
         Effect.provideService(HttpClient.HttpClient, http),
         Effect.mapError((error) => failed(error.message)),
       )
+
       const socket = yield* Socket.makeWebSocket(liveSttUrl(language), {
         headers: { authorization: `Bearer ${Redacted.value(token)}` },
         openTimeout: OPEN_TIMEOUT,
       })
+
       const reader = yield* socket.reader
       const writer = yield* socket.writer
       const heard = yield* Ref.make(LiveText.empty)
@@ -237,6 +247,7 @@ const makeLiveTranscriber = Effect.fn("LiveTranscriber.make")(function* () {
         ),
       )
       const live = yield* Ref.get(heard)
+
       return new LiveTranscript({ text: textOf(live), language: live.language })
     },
     Effect.scoped,

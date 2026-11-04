@@ -71,9 +71,11 @@ const toSpeechError = (error: XaiSdkError) =>
 /** Check that there is something to read and that xAI accepts its length. */
 export const checkText = (text: string): Effect.Effect<string, SpeechError> => {
   const trimmed = text.trim()
+
   if (trimmed === "") {
     return Effect.fail(new SpeechError({ reason: "noText", message: "There is no text to read." }))
   }
+
   if (trimmed.length > MAX_SPEECH_CHARACTERS) {
     return Effect.fail(
       new SpeechError({
@@ -82,6 +84,7 @@ export const checkText = (text: string): Effect.Effect<string, SpeechError> => {
       }),
     )
   }
+
   return Effect.succeed(trimmed)
 }
 
@@ -90,17 +93,21 @@ const makeSpeaker = Effect.fn("Speaker.make")(function* () {
 
   const speak = Effect.fn("Speaker.speak")(function* (text: string, settings: SpeechSettings) {
     const checked = yield* checkText(text)
+
     const xai = yield* client.pipe(
       Effect.mapError((error) => new SpeechError({ reason: "failed", message: error.message })),
     )
+
     const voice = Option.match(settings.voice, {
       onNone: () => ({}),
       onSome: (voiceId) => ({ voice_id: voiceId }),
     })
+
     const speed = Option.match(settings.speed, {
       onNone: () => ({}),
       onSome: (value) => ({ speed: value }),
     })
+
     const audio = yield* callXai(async (signal) => {
       const response = await xai.voice.speak(
         {
@@ -113,8 +120,10 @@ const makeSpeaker = Effect.fn("Speaker.make")(function* () {
         // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
         { signal, maxRetries: 0, timeout: Duration.toMillis(REQUEST_TIMEOUT) },
       )
+
       return response.bytes()
     }).pipe(Effect.mapError(toSpeechError))
+
     return new Speech({ audio, characters: checked.length })
   })
 

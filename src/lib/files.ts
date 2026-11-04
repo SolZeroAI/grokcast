@@ -95,9 +95,11 @@ export const savedName = (filename: string, attempt: number): string => {
     ),
     () => "file",
   )
+
   if (attempt === 0) return name
   const dot = name.lastIndexOf(".")
   const [stem, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""]
+
   return `${stem} (${attempt})${extension}`
 }
 
@@ -139,6 +141,7 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
   const sdk = client.pipe(
     Effect.mapError((error) => new FilesError({ reason: "failed", message: error.message })),
   )
+
   const options = (signal: AbortSignal, timeout = REQUEST_TIMEOUT) => ({
     signal,
     maxRetries: 0,
@@ -170,10 +173,12 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
   ): Effect.Effect<FileList, FilesError> =>
     Effect.flatMap(page(token), (result) => {
       const files = Arr.map(result.data, fromFileObject)
+
       const next = Option.filter(
         Option.fromNullishOr(result.pagination_token),
         (value) => value !== "",
       )
+
       return Option.isSome(next) && pagesLeft > 1
         ? Effect.map(
             pagesFrom(next, pagesLeft - 1),
@@ -186,6 +191,7 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
 
   const upload = Effect.fn("GrokFiles.upload")(function* (request: UploadRequest) {
     const xai = yield* sdk
+
     const result = yield* callXai((signal) =>
       xai.files.upload(
         {
@@ -199,15 +205,19 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
         options(signal, TRANSFER_TIMEOUT),
       ),
     ).pipe(Effect.mapError(toFilesError("xAI could not upload the file")))
+
     return fromFileObject(result)
   })
 
   const download = Effect.fn("GrokFiles.download")(function* (file: GrokFile) {
     const xai = yield* sdk
+
     const bytes = yield* callXai(async (signal) => {
       const response = await xai.files.content(file.id, {}, options(signal, TRANSFER_TIMEOUT))
+
       return response.bytes()
     }).pipe(Effect.mapError(toFilesError("xAI could not download the file")))
+
     return new DownloadedFile({ filename: file.filename, bytes })
   })
 
@@ -216,6 +226,7 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
     expiresAfter: Option.Option<number>,
   ) {
     const xai = yield* sdk
+
     const result = yield* callXai((signal) =>
       xai.files.createPublicUrl(
         id,
@@ -226,6 +237,7 @@ const makeFiles = Effect.fn("GrokFiles.make")(function* () {
         options(signal),
       ),
     ).pipe(Effect.mapError(toFilesError("xAI could not make a public link")))
+
     return new PublicLink({
       url: result.public_url,
       expiresAt: millis(Option.fromNullishOr(result.expires_at)),

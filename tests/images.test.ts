@@ -83,11 +83,13 @@ describe("ImageGenerator.create", () => {
     const fetch = fakeFetch(() =>
       imagesResponse({ b64_json: base64(PNG) }, { b64_json: base64(PNG) }),
     )
+
     const images = await create(
       fetch,
       signedIn(),
       request({ aspectRatio: Option.some("16:9"), resolution: Option.some("2k"), count: 2 }),
     )
+
     assert.equal(images.length, 2)
     // xAI's default output is JPEG.
     assert.equal(images[0].mimeType, "image/jpeg")
@@ -137,11 +139,13 @@ describe("ImageGenerator.create", () => {
     const empty = await createError(fetch, signedIn(), request({ prompt: "  " }))
     assert.equal(empty.reason, "failed")
     const source = new SourceImage({ bytes: PNG, mimeType: "image/png" })
+
     const many = await createError(
       fetch,
       signedIn(),
       request({ sources: [source, source, source, source] }),
     )
+
     assert.equal(many.reason, "failed")
     assert.equal(fetch.requests.length, 0)
   })

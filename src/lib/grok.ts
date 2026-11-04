@@ -146,11 +146,13 @@ export const RaycastClientId = Layer.sync(ClientId, () =>
 /** Defaults match the preferences in `package.json`. */
 export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () => {
   const values = preferences()
+
   const value = <A>(pick: (decoded: typeof Preferences.Type) => Option.Option<A>, fallback: A) =>
     values.pipe(
       Option.flatMap(pick),
       Option.getOrElse(() => fallback),
     )
+
   return new DictationSettings({
     language: languageFromPreference(value((decoded) => decoded.language, "en")),
     formatNumbers: value((decoded) => decoded.formatNumbers, true),
@@ -162,11 +164,13 @@ export const RaycastDictationPreferences = Layer.sync(DictationPreferences, () =
 /** Read Aloud's preferences. An empty value means xAI's default. */
 export const RaycastSpeechPreferences = Layer.sync(SpeechPreferences, () => {
   const values = preferences()
+
   const text = (pick: (decoded: typeof Preferences.Type) => Option.Option<string>) =>
     values.pipe(
       Option.flatMap(pick),
       Option.getOrElse(() => ""),
     )
+
   return new SpeechSettings({
     voice: optionalPreference(text((decoded) => decoded.voice)),
     speed: speedFromPreference(text((decoded) => decoded.speed)),
@@ -240,10 +244,13 @@ const filled = (text: Option.Option<string>) =>
 /** Grok Chat's command preferences. Defaults match `package.json`. */
 export const RaycastChatPreferences = Layer.sync(ChatPreferences, () => {
   const values = Schema.decodeUnknownOption(ChatPreferenceValues)(getPreferenceValues())
+
   const pick = <A>(f: (decoded: typeof ChatPreferenceValues.Type) => Option.Option<A>) =>
     Option.flatMap(values, f)
+
   const on = (tool: ChatTool, enabled: Option.Option<boolean>, fallback: boolean) =>
     Option.getOrElse(enabled, () => fallback) ? [tool] : []
+
   return new ChatSettings({
     model: filled(pick((decoded) => decoded.chatModel)),
     reasoningEffort: pick((decoded) => decoded.reasoningEffort).pipe(
@@ -290,6 +297,7 @@ export const RaycastRecorderLauncher = Layer.succeed(
       child.on("exit", (code) =>
         events.exit(exitFromCode(Option.fromNullishOr(code), stderr.join(""))),
       )
+
       return {
         // Not stdin: Tinycast closes it at once.
         finish: () => {
@@ -328,6 +336,7 @@ export const RaycastAudioLauncher = Layer.succeed(
       // A failed start also leaves `pid` empty, which fails below.
       child.on("error", () => {})
       child.unref()
+
       return yield* Option.match(Option.fromNullishOr(child.pid), {
         onNone: () =>
           Effect.fail(new PlaybackError({ message: "Could not start playing the speech." })),
@@ -359,6 +368,7 @@ export const RaycastImageFiles = Layer.succeed(
         await mkdir(folder, { recursive: true })
         const path = join(folder, name)
         await writeFile(path, bytes)
+
         return path
       }),
     remove: (path) => fileCall("Could not delete the image.", () => rm(path, { force: true })),

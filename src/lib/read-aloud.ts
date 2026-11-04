@@ -14,6 +14,7 @@ export type ReadAloudResult = Data.TaggedEnum<{
   /** Speech started to play in the background. */
   Reading: { readonly characters: number }
 }>
+
 export const ReadAloudResult = Data.taggedEnum<ReadAloudResult>()
 
 const notBlank = (text: string) => text.trim() !== ""
@@ -41,8 +42,10 @@ export const readAloud = Effect.fn("readAloud")(function* <E>(
   onSpeaking: Effect.Effect<void>,
 ) {
   const player = yield* SpeechPlayer
+
   if (yield* player.stop) return ReadAloudResult.Stopped()
   const found = yield* text
+
   const chosen = yield* Option.match(found, {
     onNone: () =>
       Effect.fail(
@@ -53,11 +56,13 @@ export const readAloud = Effect.fn("readAloud")(function* <E>(
       ),
     onSome: Effect.succeed,
   })
+
   yield* onSpeaking
   const speaker = yield* Speaker
   const preferences = yield* SpeechPreferences
   // A voice picked in Grok Voices wins over the Voice preference.
   const picked = yield* ReadAloudVoice.use((voice) => voice.get)
+
   const settings = new SpeechSettings({
     ...preferences,
     voice: Option.orElse(
@@ -65,7 +70,9 @@ export const readAloud = Effect.fn("readAloud")(function* <E>(
       () => preferences.voice,
     ),
   })
+
   const speech = yield* speaker.speak(chosen, settings)
   yield* player.play(speech.audio)
+
   return ReadAloudResult.Reading({ characters: speech.characters })
 })

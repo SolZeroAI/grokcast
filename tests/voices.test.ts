@@ -56,6 +56,7 @@ describe("VoiceLibrary.list", () => {
   it("lists custom voices newest first, across pages, then built-in voices by name", async () => {
     const fetch = fakeFetch((request) => {
       const url = new URL(request.url)
+
       if (url.pathname.endsWith("/tts/voices")) {
         return Response.json({
           voices: [
@@ -64,16 +65,19 @@ describe("VoiceLibrary.list", () => {
           ],
         })
       }
+
       if (url.searchParams.get("pagination_token") === "p2") {
         return Response.json({
           voices: [customVoice("v_new", "Newer", "2026-10-02T00:00:00Z")],
         })
       }
+
       return Response.json({
         voices: [customVoice("v_old", "Older", "2026-10-01T00:00:00Z")],
         pagination_token: "p2",
       })
     })
+
     const voices = await runLibrary(fetch, (library) => library.list)
     assert.deepEqual(
       voices.map((voice) => [voice.id, voice.custom]),
@@ -100,6 +104,7 @@ describe("VoiceLibrary.list", () => {
       fakeFetch(() => json({ error: "forbidden" }, 403)),
       (library) => Effect.flip(library.list),
     )
+
     assert.equal(error._tag, "VoicesError")
     assert.equal(error.reason, "plan")
   })
@@ -108,24 +113,29 @@ describe("VoiceLibrary.list", () => {
 describe("VoiceLibrary.create", () => {
   it("uploads the clip with only the labels that are set", async () => {
     const fetch = fakeFetch(() => Response.json(customVoice("v_1", "Mine", "2026-10-26T00:00:00Z")))
+
     const labels = new VoiceLabels({
       ...VoiceLabels.empty,
       name: Option.some("Mine"),
       tone: Option.some("calm"),
     })
+
     const voice = await runLibrary(fetch, (library) =>
       library.create(
         new ReferenceAudio({ bytes: new Uint8Array([1, 2, 3]), filename: "clip.wav" }),
         labels,
       ),
     )
+
     assert.equal(voice.id, "v_1")
     const request = fetch.requests[0]
     assert.ok(request)
     assert.ok(request.url.endsWith("/custom-voices"))
+
     const form = await new Response(request.body, {
       headers: { "content-type": request.headers.get("content-type") ?? "" },
     }).formData()
+
     assert.equal(form.get("name"), "Mine")
     assert.equal(form.get("tone"), "calm")
     assert.equal(form.get("gender"), null)
@@ -140,6 +150,7 @@ describe("VoiceLibrary.update", () => {
     const fetch = fakeFetch(() =>
       Response.json(customVoice("v_1", "Renamed", "2026-10-26T00:00:00Z")),
     )
+
     const labels = new VoiceLabels({ ...VoiceLabels.empty, name: Option.some("Renamed") })
     await runLibrary(fetch, (library) => library.update("v_1", labels))
     const request = fetch.requests[0]

@@ -22,9 +22,11 @@ export const MAX_SOURCE_IMAGES = 3
 
 /** The aspect ratios Grokcast offers. xAI accepts a few more. */
 export const AspectRatio = Schema.Literals(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"])
+
 export type AspectRatio = typeof AspectRatio.Type
 
 export const Resolution = Schema.Literals(["1k", "2k"])
+
 export type Resolution = typeof Resolution.Type
 
 /** Image generation or editing failed. `reason` picks what the UI offers, `message` is for the user. */
@@ -64,6 +66,7 @@ const WireImage = Schema.Struct({
   b64_json: Schema.optional(Schema.NullOr(Schema.Uint8ArrayFromBase64)),
   mime_type: Schema.optional(Schema.NullOr(Schema.String)),
 })
+
 const WireImages = Schema.Array(WireImage)
 
 const failed = (message: string) => new ImageError({ reason: "failed", message })
@@ -120,24 +123,31 @@ const makeImageGenerator = Effect.fn("ImageGenerator.make")(function* () {
 
   const create = Effect.fn("ImageGenerator.create")(function* (request: ImageRequest) {
     const editing = request.sources.length > 0
+
     if (request.prompt.trim() === "") {
       return yield* failed("Describe the image first.")
     }
+
     if (request.sources.length > MAX_SOURCE_IMAGES) {
       return yield* failed(`Choose up to ${MAX_SOURCE_IMAGES} images to edit.`)
     }
+
     const xai = yield* client.pipe(Effect.mapError((error) => failed(error.message)))
+
     // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
     const options = (signal: AbortSignal) => ({
       signal,
       maxRetries: 0,
       timeout: Duration.toMillis(REQUEST_TIMEOUT),
     })
+
     const body = commonBody(request)
+
     const sources = Arr.map(
       request.sources,
       (source) => new Blob([new Uint8Array(source.bytes)], { type: source.mimeType }),
     )
+
     const response = yield* callXai((signal) =>
       editing
         ? xai.images.edit(
@@ -152,13 +162,17 @@ const makeImageGenerator = Effect.fn("ImageGenerator.make")(function* () {
             options(signal),
           ),
     ).pipe(Effect.mapError(toImageError(editing)))
+
     const data = yield* Schema.decodeUnknownEffect(WireImages)(response.data).pipe(
       Effect.mapError(() => failed("xAI sent an image Grokcast could not read.")),
     )
+
     const images = toGenerated(data)
+
     if (!Arr.isArrayNonEmpty(images)) {
       return yield* failed("xAI did not send an image. Grok may have declined the prompt.")
     }
+
     return images
   })
 

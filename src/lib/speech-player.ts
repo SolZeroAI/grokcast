@@ -60,6 +60,7 @@ const makePlayer = Effect.fn("SpeechPlayer.make")(function* () {
   const stop = Effect.gen(function* () {
     const current = yield* playing
     yield* forget
+
     return yield* Option.match(current, {
       onNone: () => Effect.succeed(false),
       onSome: (speech) => launcher.stop(speech.pid).pipe(Effect.as(true)),

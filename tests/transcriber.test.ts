@@ -63,9 +63,11 @@ const transcribeError = (
 const fieldsOf = async (fetch: FakeFetch, index = 0) => {
   const request = fetch.requests[index]
   assert.ok(request, `no request ${index}`)
+
   const form = await new Response(request.body, {
     headers: { "content-type": request.headers.get("content-type") ?? "" },
   }).formData()
+
   return Object.fromEntries(
     [...form.entries()].filter((entry): entry is [string, string] => P.isString(entry[1])),
   )
@@ -114,6 +116,7 @@ describe("Transcriber.transcribe", () => {
         ? json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 })
         : json({ error: "unauthorized" }, 401),
     )
+
     const error = await transcribeError(fetch)
     assert.equal(error.reason, "signIn")
   })
@@ -132,6 +135,7 @@ describe("Transcriber.transcribe", () => {
       requests: [],
       fetch: () => Promise.reject(new TypeError("fetch failed")),
     }
+
     const error = await transcribeError(fetch)
     assert.equal(error.reason, "network")
   })

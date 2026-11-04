@@ -45,9 +45,11 @@ export const ASPECT_RATIOS = [
   "21:9",
   "5:2",
 ] as const
+
 export type AspectRatio = (typeof ASPECT_RATIOS)[number]
 
 export const RESOLUTIONS = ["480p", "720p", "1080p"] as const
+
 export type Resolution = (typeof RESOLUTIONS)[number]
 
 /** A picture or video from disk. `type` is its media type, such as `image/png`. */
@@ -80,6 +82,7 @@ export type VideoRequest = Data.TaggedEnum<{
     readonly duration: Option.Option<number>
   }
 }>
+
 export const VideoRequest = Data.taggedEnum<VideoRequest>()
 
 export class Video extends Schema.Class<Video>("Video")({
@@ -95,6 +98,7 @@ export type VideoStatus = Data.TaggedEnum<{
   Pending: { readonly progress: Option.Option<number> }
   Done: { readonly video: Video }
 }>
+
 export const VideoStatus = Data.taggedEnum<VideoStatus>()
 
 /** The parts of the SDK's `VideoResponse` that Grokcast reads. */
@@ -113,6 +117,7 @@ const VideoResponse = Schema.Struct({
     }),
   ),
 })
+
 type VideoResponse = typeof VideoResponse.Type
 
 const wording = { feature: "video generation", failed: "xAI could not make the video" }
@@ -190,12 +195,14 @@ const MEDIA_TYPES = {
 /** The media type of `path`, when xAI accepts that kind of file. */
 export const mediaTypeOf = (path: string): Option.Option<string> => {
   const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase()
+
   return Option.fromNullishOr(Object.entries(MEDIA_TYPES).find(([key]) => key === extension)?.[1])
 }
 
 /** A text bar for `progress` (0 to 100), such as `████░░░░`. */
 export const progressBar = (progress: number, steps = 20): string => {
   const filled = Math.round((Math.min(100, Math.max(0, progress)) / 100) * steps)
+
   return "█".repeat(filled) + "░".repeat(steps - filled)
 }
 
@@ -254,14 +261,29 @@ const makeVideoGenerator = Effect.fn("VideoGenerator.make")(function* () {
           ),
         ),
     })
+
     return started.request_id
   })
 
   const status = Effect.fn("VideoGenerator.status")(function* (requestId: string) {
-    const response = yield* sdk((client, signal) => client.videos.get(requestId, options(signal)))
+    // The job may still finish at xAI, so a failed check keeps its ID for Check Again.
+    const response = yield* sdk((client, signal) =>
+      client.videos.get(requestId, options(signal)),
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new VideoError({
+            reason: error.reason,
+            message: error.message,
+            requestId: Option.some(requestId),
+          }),
+      ),
+    )
+
     const decoded = yield* Schema.decodeUnknownEffect(VideoResponse)(response).pipe(
       Effect.mapError(() => failed("xAI sent a video status Grokcast could not read.")),
     )
+
     return yield* toStatus(decoded)
   })
 
@@ -294,6 +316,7 @@ const makeVideoGenerator = Effect.fn("VideoGenerator.make")(function* () {
         orElse: () => Effect.fail(stillRunning(requestId)),
       }),
     )
+
     return yield* last.pipe(
       Option.flatMap(Option.liftPredicate(VideoStatus.$is("Done"))),
       Option.match({
@@ -309,6 +332,7 @@ const makeVideoGenerator = Effect.fn("VideoGenerator.make")(function* () {
   ) {
     const requestId = yield* start(request)
     yield* onPending(Option.none())
+
     return yield* follow(requestId, onPending)
   })
 

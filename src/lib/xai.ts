@@ -39,6 +39,7 @@ export const XaiFailureReason = Schema.Literals([
   "network",
   "failed",
 ])
+
 export type XaiFailureReason = typeof XaiFailureReason.Type
 
 /** A failed xAI request, described for the user. */
@@ -147,6 +148,7 @@ const startClient = (fetch: GrokSession["Service"]["fetch"]) =>
         Effect.sync(() => {
           const reported = versions.node
           versions.node = SDK_MIN_NODE
+
           return reported
         }),
         () => newClient(fetch),
@@ -165,6 +167,7 @@ const make = Effect.fn("XaiClient.make")(function* () {
   const session = yield* GrokSession
   // Made on first use, so a host the SDK refuses to start in fails only there.
   const client = yield* Effect.cached(startClient(session.fetch))
+
   return XaiClient.of({ client })
 })
 

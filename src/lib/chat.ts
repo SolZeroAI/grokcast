@@ -21,6 +21,7 @@ const IDLE_TIMEOUT = Duration.minutes(3)
 
 /** Grok's own tools, which xAI runs. */
 export const ChatTool = Schema.Literals(["webSearch", "xSearch", "codeExecution"])
+
 export type ChatTool = typeof ChatTool.Type
 
 /**
@@ -30,6 +31,7 @@ export type ChatTool = typeof ChatTool.Type
 export const DEFAULT_CHAT_MODEL = "grok-4.7"
 
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high"])
+
 export type ReasoningEffort = typeof ReasoningEffort.Type
 
 export class ChatSettings extends Schema.Class<ChatSettings>("ChatSettings")({
@@ -182,9 +184,11 @@ export const toolLabel = (call: ServerToolCall): string =>
 /** A conversation's title: the first line of its first question, cut at a word. */
 export const titleOf = (prompt: string, max = 60): string => {
   const line = Option.getOrElse(Arr.head(prompt.trim().split("\n")), () => "").trim()
+
   if (line.length <= max) return line
   const cut = line.slice(0, max)
   const space = cut.lastIndexOf(" ")
+
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
@@ -222,18 +226,21 @@ const makeChat = Effect.fn("Chat.make")(function* () {
    */
   const loadImages = Effect.fn("Chat.loadImages")(function* (context: AskContext) {
     const fail = (message: string) => new ChatError({ reason: "failed", message })
+
     const current = yield* Effect.forEach(context.images, (path) =>
       files.read(path).pipe(
         Effect.map((blob) => [path, blob] as const),
         Effect.mapError((error) => fail(error.message)),
       ),
     )
+
     const earlier = yield* Effect.forEach(Arr.flatMap(context.history, imagesOf), (path) =>
       files.read(path).pipe(
         Effect.map((blob) => [path, blob] as const),
         Effect.option,
       ),
     )
+
     return new Map([...Arr.getSomes(earlier), ...current])
   })
 
@@ -246,15 +253,18 @@ const makeChat = Effect.fn("Chat.make")(function* () {
     const client = yield* xai.client.pipe(
       Effect.mapError((error) => new ChatError({ reason: "failed", message: error.message })),
     )
+
     const loaded = yield* loadImages(context)
     const startedAt = yield* Clock.currentTimeMillis
     const seen = { answer: "", citations: Arr.empty<Citation>(), tools: Arr.empty<string>() }
+
     const response = yield* callXai(async (signal) => {
       const stream = await client.responses.create(
         { ...requestOf(settings, context, prompt, loaded), stream: true },
         // A 429 here is usually the plan's usage limit, so say so at once instead of waiting.
         { signal, maxRetries: 0, idleTimeout: Duration.toMillis(IDLE_TIMEOUT) },
       )
+
       return stream
         .on("reasoning", () => progress.thinking())
         .on("text", (delta) => {
@@ -263,6 +273,7 @@ const makeChat = Effect.fn("Chat.make")(function* () {
         })
         .on("server_tool_call", (call) => {
           const label = toolLabel(call)
+
           if (!seen.tools.includes(label)) seen.tools = Arr.append(seen.tools, label)
           progress.tool(label)
         })
@@ -283,11 +294,14 @@ const makeChat = Effect.fn("Chat.make")(function* () {
           feature: "chat",
           failed: "Grok could not answer",
         })
+
         return new ChatError({ reason: failure.reason, message: failure.message })
       }),
     )
+
     const finishedAt = yield* Clock.currentTimeMillis
     const answer = response.toText().trim()
+
     return new ChatTurn({
       id: String(startedAt),
       prompt,
@@ -333,6 +347,7 @@ const sourceLink = (citation: Citation): string => {
       () => citation.url,
     ),
   )
+
   return `[${name.replaceAll("[", "(").replaceAll("]", ")")}](${citation.url})`
 }
 

@@ -85,9 +85,11 @@ const makeLibrary = Effect.fn("ImageLibrary.make")(function* () {
     images: ReadonlyArray<GeneratedImage>,
   ) {
     const createdAt = yield* Clock.currentTimeMillis
+
     const added = yield* Effect.forEach(images, (image, index) => {
       const id = `${createdAt}-${index}`
       const size = imageSize(image.bytes)
+
       return files.write(`${id}.${extensionFor(image.mimeType)}`, image.bytes).pipe(
         Effect.map(
           (path) =>
@@ -106,17 +108,21 @@ const makeLibrary = Effect.fn("ImageLibrary.make")(function* () {
         ),
       )
     })
+
     yield* lock.withPermits(1)(
       Effect.gen(function* () {
         const ids = new Set(Arr.map(added, (entry) => entry.id))
+
         const all = Arr.appendAll(
           added,
           Arr.filter(yield* list, (old) => !ids.has(old.id)),
         )
+
         yield* store.set(KEY, Arr.take(all, MAX_IMAGES))
         yield* removeFiles(Arr.drop(all, MAX_IMAGES))
       }),
     )
+
     return added
   })
 

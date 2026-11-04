@@ -111,6 +111,7 @@ describe("Speaker.speak", () => {
 
   it("asks the user to sign in when nobody is signed in", async () => {
     const fetch = fakeFetch(mp3)
+
     const error = await Effect.runPromise(
       Effect.flip(
         TestClock.setTime(NOW).pipe(
@@ -119,6 +120,7 @@ describe("Speaker.speak", () => {
         ),
       ),
     )
+
     assert.equal(error.reason, "signIn")
     assert.equal(fetch.requests.length, 0)
   })

@@ -62,6 +62,7 @@ describe("ChatConversations", () => {
         ),
       ),
     )
+
     assert.equal(conversation.title, "First?")
     assert.deepEqual(
       conversation.turns.map((turn) => turn.prompt),
@@ -78,9 +79,11 @@ describe("ChatConversations", () => {
         yield* ChatConversations.use((saved) =>
           saved.save(withTurn(first, turnAt(NOW + 10, "again"))),
         )
+
         return yield* titles
       }),
     )
+
     assert.deepEqual(listed, ["first", "second"])
   })
 
@@ -91,6 +94,7 @@ describe("ChatConversations", () => {
         Effect.andThen(titles),
       ),
     )
+
     assert.deepEqual(listed, [])
   })
 
@@ -104,6 +108,7 @@ describe("ChatConversations", () => {
         },
       ).pipe(Effect.andThen(titles)),
     )
+
     assert.equal(listed.length, MAX_CONVERSATIONS)
     assert.equal(listed[0], `c${MAX_CONVERSATIONS + 1}`)
   })
@@ -116,9 +121,11 @@ describe("ChatConversations", () => {
         yield* ChatConversations.use((saved) => saved.remove(first.id))
         const afterRemove = yield* titles
         yield* ChatConversations.use((saved) => saved.clear)
+
         return [afterRemove, yield* titles]
       }),
     )
+
     assert.deepEqual(listed, [["second"], []])
   })
 
@@ -128,6 +135,7 @@ describe("ChatConversations", () => {
         Effect.andThen(titles),
       ),
     )
+
     assert.deepEqual(listed, [])
   })
 })

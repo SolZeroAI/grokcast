@@ -48,6 +48,7 @@ const layer = (audio: FakeAudio) =>
                     audio.played.push(bytes)
                     const pid = audio.nextPid++
                     audio.playing.add(pid)
+
                     return pid
                   }),
             isPlaying: (pid) => Effect.sync(() => audio.playing.has(pid)),
@@ -66,6 +67,7 @@ const layer = (audio: FakeAudio) =>
           Effect.sync(() => {
             audio.spoken.push(text)
             audio.voices.push(settings.voice)
+
             return new Speech({ audio: new Uint8Array([1, 2]), characters: text.length })
           }),
       }),
@@ -82,10 +84,13 @@ const text = (value: string) => Effect.succeed(Option.some(value))
 describe("firstText", () => {
   it("takes the first source with text and does not read the rest", async () => {
     let clipboardRead = false
+
     const clipboard = Effect.sync(() => {
       clipboardRead = true
+
       return Option.some("clipboard")
     })
+
     const found = await Effect.runPromise(firstText([text("  "), text("selection"), clipboard]))
     assert.deepEqual(found, Option.some("selection"))
     assert.equal(clipboardRead, false)
@@ -100,12 +105,14 @@ describe("firstText", () => {
 describe("readAloud", () => {
   it("reads the text, then stops on the next run without asking xAI again", async () => {
     const audio = fakeAudio()
+
     const results = await Effect.runPromise(
       Effect.all([
         readAloud(text("Hello."), Effect.void),
         readAloud(text("Hello again."), Effect.void),
       ]).pipe(Effect.provide(layer(audio))),
     )
+
     assert.deepEqual(
       results.map((result) => result._tag),
       ["Reading", "Stopped"],
@@ -116,14 +123,17 @@ describe("readAloud", () => {
 
   it("reads again once the earlier speech has finished on its own", async () => {
     const audio = fakeAudio()
+
     const results = await Effect.runPromise(
       Effect.gen(function* () {
         const first = yield* readAloud(text("One."), Effect.void)
         audio.playing.clear()
         const second = yield* readAloud(text("Two."), Effect.void)
+
         return [first._tag, second._tag]
       }).pipe(Effect.provide(layer(audio))),
     )
+
     assert.deepEqual(results, ["Reading", "Reading"])
     assert.deepEqual(audio.spoken, ["One.", "Two."])
   })
@@ -134,6 +144,7 @@ describe("readAloud", () => {
         Effect.provide(layer(fakeAudio())),
       ),
     )
+
     assert.ok(error instanceof SpeechError)
     assert.equal(error.reason, "noText")
   })
@@ -141,14 +152,17 @@ describe("readAloud", () => {
   it("reports a player that would not start", async () => {
     const audio = fakeAudio()
     audio.failPlay = true
+
     const error = await Effect.runPromise(
       Effect.flip(readAloud(text("Hi."), Effect.void)).pipe(Effect.provide(layer(audio))),
     )
+
     assert.ok(error instanceof PlaybackError)
   })
 
   it("uses the voice picked in Grok Voices instead of the Voice preference", async () => {
     const audio = fakeAudio()
+
     const custom = new GrokVoice({
       id: "v_123",
       name: "My Voice",
@@ -162,6 +176,7 @@ describe("readAloud", () => {
       tone: Option.none(),
       created: Option.none(),
     })
+
     const finishPlaying = Effect.sync(() => audio.playing.clear())
     await Effect.runPromise(
       ReadAloudVoice.use((voice) => voice.set(custom)).pipe(

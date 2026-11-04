@@ -42,11 +42,20 @@ export default function DictationHistoryCommand() {
       ),
     )
 
-  const remove = (entry: HistoryEntry) =>
-    change(
-      DictationHistory.use((history) => history.remove(entry.id)),
-      "Could not delete the dictation",
-    )
+  const remove = async (entry: HistoryEntry) => {
+    const confirmed = await confirmAlert({
+      title: "Delete this dictation?",
+      message: "This removes it from this Mac.",
+      primaryAction: { title: "Delete", style: Alert.ActionStyle.Destructive },
+    })
+
+    if (confirmed) {
+      change(
+        DictationHistory.use((history) => history.remove(entry.id)),
+        "Could not delete the dictation",
+      )
+    }
+  }
 
   const clearAll = async () => {
     const confirmed = await confirmAlert({
@@ -54,6 +63,7 @@ export default function DictationHistoryCommand() {
       message: "This removes the dictation history from this Mac.",
       primaryAction: { title: "Delete All", style: Alert.ActionStyle.Destructive },
     })
+
     if (confirmed) {
       change(
         DictationHistory.use((history) => history.clear),
@@ -108,7 +118,7 @@ export default function DictationHistoryCommand() {
                 icon={Icon.Trash}
                 style={Action.Style.Destructive}
                 shortcut={{ modifiers: ["ctrl"], key: "x" }}
-                onAction={() => remove(entry)}
+                onAction={() => void remove(entry)}
               />
               <Action
                 title="Delete All Dictations"

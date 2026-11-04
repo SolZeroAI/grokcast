@@ -28,6 +28,7 @@ export const MIN_DICTATION_SECONDS = 0.3
 export const LIVE_FINISH_TIMEOUT = Duration.seconds(10)
 
 export const AfterDictation = Schema.Literals(["paste", "copy"])
+
 export type AfterDictation = typeof AfterDictation.Type
 
 export class DictationSettings extends Schema.Class<DictationSettings>("DictationSettings")({
@@ -61,6 +62,7 @@ export const recordSpeech = Effect.fn("recordSpeech")(function* (
   onAudio: (seconds: number, level: number, chunk: Uint8Array) => void,
 ) {
   const recorder = yield* Recorder
+
   const recorded = yield* recorder.record.pipe(
     Stream.interruptWhen(Effect.raceFirst(stop, Effect.sleep(MAX_DICTATION))),
     Stream.runFold(
@@ -68,10 +70,12 @@ export const recordSpeech = Effect.fn("recordSpeech")(function* (
       (total, chunk) => {
         const bytes = total.bytes + chunk.byteLength
         onAudio(durationOfBytes(bytes), levelDbfs(chunk), chunk)
+
         return { chunks: Arr.append(total.chunks, chunk), bytes }
       },
     ),
   )
+
   return {
     audio: joinChunks(recorded.chunks),
     seconds: durationOfBytes(recorded.bytes),
@@ -84,6 +88,7 @@ export const transcribeRecording = Effect.fn("transcribeRecording")(function* (
 ) {
   const settings = yield* DictationPreferences
   const transcriber = yield* Transcriber
+
   return yield* transcriber.transcribe(recording.audio, {
     language: settings.language,
     formatNumbers: settings.formatNumbers,
@@ -128,16 +133,19 @@ export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
   const settings = yield* DictationPreferences
   const live = yield* LiveTranscriber
   const audio = yield* Queue.unbounded<Uint8Array, Cause.Done>()
+
   const liveText = yield* Effect.forkChild(
     live.transcribe(Stream.fromQueue(audio), settings.language, progress.text).pipe(
       Effect.tapError(() => Effect.sync(progress.liveStopped)),
       Effect.option,
     ),
   )
+
   const recording = yield* recordSpeech(stop, (seconds, level, chunk) => {
     Queue.offerUnsafe(audio, chunk)
     progress.audio(seconds, level)
   }).pipe(Effect.ensuring(Queue.end(audio)))
+
   if (recording.seconds < MIN_DICTATION_SECONDS) return Option.none<Dictation>()
   progress.finishing(recording.seconds)
   const stoppedAt = yield* Clock.currentTimeMillis
@@ -148,6 +156,7 @@ export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
       Option.filter(Option.flatten(transcript), (found) => found.text !== ""),
     ),
   )
+
   const transcript = yield* Option.match(heard, {
     onSome: (found) => Effect.succeed({ text: found.text, language: found.language, live: true }),
     onNone: () =>
@@ -155,15 +164,19 @@ export const dictateSpeech = Effect.fn("dictateSpeech")(function* (
         Effect.map((found) => ({ text: found.text, language: found.language, live: false })),
       ),
   })
+
   if (transcript.text === "") return Option.none<Dictation>()
+
   const dictation = new Dictation({
     ...transcript,
     seconds: recording.seconds,
     readySeconds: ((yield* Clock.currentTimeMillis) - stoppedAt) / 1000,
   })
+
   if (settings.keepHistory) {
     yield* DictationHistory.use((history) => history.add(dictation)).pipe(Effect.ignore)
   }
+
   return Option.some(dictation)
 })
 
@@ -194,6 +207,7 @@ export const detailRows = (
   facts: DictationFacts,
 ): ReadonlyArray<{ readonly title: string; readonly text: string }> => {
   const words = countWords(facts.text)
+
   const rows = [
     Option.some({ title: "Words", text: String(words) }),
     Option.some({ title: "Length", text: clockOf(facts.seconds) }),
@@ -211,6 +225,7 @@ export const detailRows = (
       text: live ? "Live" : "From the whole recording",
     })),
   ]
+
   return Arr.getSomes(rows)
 }
 
@@ -225,12 +240,14 @@ export const recentText = (text: string): string => {
   if (text.length <= LIVE_TEXT_CHARS) return text
   const tail = text.slice(-LIVE_TEXT_CHARS)
   const word = tail.indexOf(" ")
+
   return `…${word >= 0 ? tail.slice(word + 1) : tail}`
 }
 
 /** A length as minutes and seconds, such as `0:07` or `2:15`. */
 export const clockOf = (seconds: number): string => {
   const whole = Math.floor(seconds)
+
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`
 }
 

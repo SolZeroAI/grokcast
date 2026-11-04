@@ -82,10 +82,15 @@ const video = {
 const catalogFetch = (general: () => Response) =>
   fakeFetch((request) => {
     const path = new URL(request.url).pathname
+
     if (path.endsWith("/language-models")) return Response.json({ models: [language] })
+
     if (path.endsWith("/image-generation-models")) return Response.json({ models: [image] })
+
     if (path.endsWith("/video-generation-models")) return Response.json({ models: [video] })
+
     if (path.endsWith("/models")) return general()
+
     return json({ error: "unexpected" }, 404)
   })
 
@@ -94,6 +99,7 @@ describe("ModelCatalog.list", () => {
     const fetch = catalogFetch(() =>
       Response.json({ object: "list", data: [{ ...language, context_length: 256_000 }] }),
     )
+
     const models = await runCatalog(fetch, (catalog) => catalog.list)
     assert.deepEqual(
       models.map((model) => [model.id, model.kind]),
@@ -120,6 +126,7 @@ describe("ModelCatalog.list", () => {
       catalogFetch(() => json({ error: "nope" }, 500)),
       (catalog) => catalog.list,
     )
+
     assert.equal(models.length, 3)
     assert.ok(models.every((model) => Option.isNone(model.contextLength)))
   })
@@ -133,6 +140,7 @@ describe("ModelCatalog.list", () => {
       ),
       (catalog) => Effect.flip(catalog.list),
     )
+
     assert.equal(error._tag, "ModelsError")
     assert.equal(error.reason, "signIn")
   })
@@ -148,6 +156,7 @@ describe("ModelCatalog.tokenize", () => {
         ],
       }),
     )
+
     const tokens = await runCatalog(fetch, (catalog) => catalog.tokenize("grok-4", "Hello world"))
     assert.deepEqual(
       tokens.map((token) => [token.id, token.text]),
@@ -167,6 +176,7 @@ describe("ModelCatalog.tokenize", () => {
       fakeFetch(() => json({ error: "slow down" }, 429)),
       (catalog) => Effect.flip(catalog.tokenize("grok-4", "Hi")),
     )
+
     assert.equal(error.reason, "usageLimit")
   })
 })

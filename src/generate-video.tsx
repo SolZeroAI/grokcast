@@ -8,8 +8,6 @@ import {
   Detail,
   Form,
   Icon,
-  launchCommand,
-  LaunchType,
   showInFinder,
   showToast,
   Toast,
@@ -37,8 +35,10 @@ import {
   type MediaFile,
   type Video,
 } from "./lib/video.ts"
+import { SignInAction } from "./components/launch.tsx"
 
 const Mode = Schema.Literals(["generate", "edit", "extend"])
+
 type Mode = typeof Mode.Type
 
 /** The form's dropdowns use this value for "leave it to xAI". */
@@ -57,6 +57,7 @@ const FormValues = Schema.Struct({
   aspectRatio: Schema.OptionFromOptionalKey(Schema.String),
   resolution: Schema.OptionFromOptionalKey(Schema.String),
 })
+
 type FormValues = typeof FormValues.Type
 
 /** The file a picker holds, when there is one. */
@@ -85,11 +86,14 @@ export default function GenerateVideo() {
 
   const submit = (raw: Form.Values) => {
     const values = Schema.decodeUnknownOption(FormValues)(raw)
+
     const problem = Option.match(values, {
       onNone: () => Option.some("Check the form and try again."),
       onSome: formProblem,
     })
+
     setError(problem)
+
     if (Option.isSome(problem) || Option.isNone(values)) return
     push(<VideoJob values={values.value} />)
   }
@@ -196,6 +200,7 @@ export default function GenerateVideo() {
 /** Why the form cannot be sent yet, if anything. */
 const formProblem = (values: FormValues): Option.Option<string> => {
   const prompt = values.prompt.trim()
+
   return Match.value(values.mode).pipe(
     Match.when("generate", () =>
       prompt === "" && Option.isNone(pickedFile(values.image))
@@ -222,6 +227,7 @@ type State = Data.TaggedEnum<{
     readonly requestId: Option.Option<string>
   }
 }>
+
 const State = Data.taggedEnum<State>()
 
 /** What to run: a new job from the form, or another look at a job xAI may still finish. */
@@ -229,11 +235,13 @@ type Task = Data.TaggedEnum<{
   Make: {}
   CheckAgain: { readonly requestId: string }
 }>
+
 const Task = Data.taggedEnum<Task>()
 
 function VideoJob({ values }: { readonly values: FormValues }) {
   const { pop } = useNavigation()
   const [state, setState] = useState<State>(State.Starting())
+
   const [task, setTask] = useState<{ readonly task: Task; readonly attempt: number }>({
     task: Task.Make(),
     attempt: 0,
@@ -242,6 +250,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
   useEffect(() => {
     const onPending = (progress: Option.Option<number>) =>
       Effect.sync(() => setState(State.Generating({ progress })))
+
     const program = Task.$match(task.task, {
       Make: () =>
         requestFrom(values).pipe(
@@ -254,6 +263,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
           Effect.andThen(VideoGenerator.use((videos) => videos.follow(requestId, onPending))),
         ),
     })
+
     const fiber = GrokRuntime.runFork(
       program.pipe(
         Effect.tap((video) =>
@@ -272,6 +282,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
         ),
       ),
     )
+
     return () => {
       GrokRuntime.runFork(Fiber.interrupt(fiber))
     }
@@ -410,19 +421,7 @@ function VideoJob({ values }: { readonly values: FormValues }) {
                 />
               ),
             })}
-            {signIn ? (
-              <Action
-                title="Sign in to Grok"
-                icon={Icon.Person}
-                onAction={() =>
-                  void launchCommand({
-                    name: "account",
-                    type: LaunchType.UserInitiated,
-                    context: { signIn: true },
-                  })
-                }
-              />
-            ) : null}
+            {signIn ? <SignInAction /> : null}
             <Action title="Try Again" icon={Icon.Repeat} onAction={() => run(Task.Make())} />
             {makeAnother}
           </ActionPanel>
@@ -457,11 +456,13 @@ function Status({
 const describeRequest = (values: FormValues): string => {
   const prompt = values.prompt.trim()
   const file = Option.orElse(pickedFile(values.image), () => pickedFile(values.video))
+
   const heading = Match.value(values.mode).pipe(
     Match.when("generate", () => "# New Video"),
     Match.when("edit", () => "# Edit a Video"),
     Match.orElse(() => "# Extend a Video"),
   )
+
   return [
     heading,
     "",
@@ -492,11 +493,14 @@ const readMedia = Effect.fn("readMedia")(function* (path: string, kind: "image" 
       onSome: Effect.succeed,
     }),
   )
+
   const bytes = yield* Effect.tryPromise({
     try: () => readFile(path),
     catch: () => unreadable(`Could not read ${basename(path)}.`),
   })
+
   const file: MediaFile = { bytes: new Uint8Array(bytes), type }
+
   return file
 })
 
@@ -511,6 +515,7 @@ const requestFrom = Effect.fn("requestFrom")(function* (values: FormValues) {
   const prompt = values.prompt.trim()
   const isAspectRatio = isOneOf(ASPECT_RATIOS)
   const isResolution = isOneOf(RESOLUTIONS)
+
   return yield* Match.value(values.mode).pipe(
     Match.when("generate", () =>
       Effect.map(readPicked(values.image, "image"), (image) =>
@@ -548,13 +553,16 @@ const requestFrom = Effect.fn("requestFrom")(function* (values: FormValues) {
 /** Download the MP4 to ~/Downloads and return its path. */
 const saveToDownloads = Effect.fn("saveToDownloads")(function* (video: Video) {
   const bytes = yield* VideoGenerator.use((videos) => videos.download(video))
+
   const stamp = DateTime.formatIso(yield* DateTime.now)
     .replaceAll(":", "-")
     .slice(0, 19)
+
   const path = join(homedir(), "Downloads", `Grok Video ${stamp}.mp4`)
   yield* Effect.tryPromise({
     try: () => writeFile(path, bytes),
     catch: () => unreadable("Could not write the video to your Downloads folder."),
   })
+
   return path
 })

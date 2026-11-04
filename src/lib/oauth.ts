@@ -103,6 +103,7 @@ export const TokenResponse = Schema.Struct({
   id_token: Schema.OptionFromOptionalKey(Schema.RedactedFromValue(Schema.NonEmptyString)),
   expires_in: Schema.OptionFromOptionalKey(Schema.Finite),
 })
+
 export type TokenResponse = typeof TokenResponse.Type
 
 const OAuthErrorBody = Schema.Struct({
@@ -118,6 +119,7 @@ const send = Effect.fn("oauth.send")(function* (
   failure: string,
 ) {
   const client = yield* HttpClient.HttpClient
+
   const response = yield* client
     .execute(request)
     .pipe(
@@ -125,10 +127,13 @@ const send = Effect.fn("oauth.send")(function* (
         () => new OAuthError({ code: "network_error", message: failure, status: Option.none() }),
       ),
     )
+
   if (isOk(response.status)) return response
+
   const body = yield* HttpClientResponse.schemaBodyJson(OAuthErrorBody)(response).pipe(
     Effect.option,
   )
+
   return yield* new OAuthError({
     code: Option.match(body, { onNone: () => "http_error", onSome: (parsed) => parsed.error }),
     message: body.pipe(
@@ -167,11 +172,13 @@ export const discoverEndpoints = Effect.fn("oauth.discoverEndpoints")(function* 
         new OAuthError({ code: "discovery_failed", message: error.message, status: error.status }),
     ),
   )
+
   const config = yield* decodeBody(
     OpenIdConfiguration,
     "invalid_discovery",
     "xAI sign-in returned an unexpected configuration.",
   )(response)
+
   return new OAuthEndpoints({
     deviceAuthorization: Option.getOrElse(
       config.device_authorization_endpoint,
@@ -194,11 +201,13 @@ export const requestDeviceCode = Effect.fn("oauth.requestDeviceCode")(function* 
     }),
     "Could not start xAI sign-in",
   )
+
   const body = yield* decodeBody(
     DeviceCodeResponse,
     "invalid_device_code",
     "xAI sign-in returned an incomplete device code.",
   )(response)
+
   return new DeviceCode({
     deviceCode: Redacted.make(body.device_code),
     userCode: body.user_code,
@@ -228,6 +237,7 @@ const exchangeDeviceCode = Effect.fn("oauth.exchangeDeviceCode")(function* (
     }),
     "xAI sign-in failed",
   )
+
   return yield* readTokenResponse(response)
 })
 
@@ -254,6 +264,7 @@ export const pollDeviceToken = Effect.fn("oauth.pollDeviceToken")(function* (
         ),
       ),
     )
+
   return yield* poll(Duration.seconds(device.interval)).pipe(
     Effect.timeoutOrElse({
       duration: Duration.seconds(device.expiresIn),
@@ -282,6 +293,7 @@ export const refreshTokens = Effect.fn("oauth.refreshTokens")(function* (
     }),
     "Could not refresh the Grok sign-in",
   )
+
   return yield* readTokenResponse(response)
 })
 
@@ -326,14 +338,17 @@ export class ClientId extends Context.Service<ClientId, string>()("grok/ClientId
 const makeXaiEndpoints = Effect.fn("XaiEndpoints.make")(function* () {
   const client = yield* HttpClient.HttpClient
   const cache = yield* Ref.make(Option.none<OAuthEndpoints>())
+
   const discover = discoverEndpoints(XAI_ISSUER).pipe(
     Effect.provideService(HttpClient.HttpClient, client),
     Effect.tap((endpoints) => Ref.set(cache, Option.some(endpoints))),
   )
+
   // Only a successful discovery is kept, so a failed one is retried on the next use.
   const get = Ref.get(cache).pipe(
     Effect.flatMap(Option.match({ onNone: () => discover, onSome: Effect.succeed })),
   )
+
   return XaiEndpoints.of({ get })
 })
 

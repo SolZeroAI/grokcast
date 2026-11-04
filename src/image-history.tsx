@@ -5,8 +5,6 @@ import {
   confirmAlert,
   Grid,
   Icon,
-  launchCommand,
-  LaunchType,
   showToast,
   Toast,
 } from "@raycast/api"
@@ -16,6 +14,7 @@ import { useEffect, useState } from "react"
 import { ImageItem, libraryAspect } from "./components/images.tsx"
 import { GrokRuntime } from "./lib/grok.ts"
 import { ImageLibrary, type ImageEntry } from "./lib/image-library.ts"
+import { openCommand } from "./components/launch.tsx"
 
 export default function ImageHistory() {
   const [entries, setEntries] = useState<Option.Option<ReadonlyArray<ImageEntry>>>(Option.none())
@@ -42,11 +41,20 @@ export default function ImageHistory() {
       ),
     )
 
-  const remove = (entry: ImageEntry) =>
-    change(
-      ImageLibrary.use((library) => library.remove(entry.id)),
-      "Could not delete the image",
-    )
+  const remove = async (entry: ImageEntry) => {
+    const confirmed = await confirmAlert({
+      title: "Delete this image?",
+      message: "This removes the image file from this Mac.",
+      primaryAction: { title: "Delete", style: Alert.ActionStyle.Destructive },
+    })
+
+    if (confirmed) {
+      change(
+        ImageLibrary.use((library) => library.remove(entry.id)),
+        "Could not delete the image",
+      )
+    }
+  }
 
   const clearAll = async () => {
     const confirmed = await confirmAlert({
@@ -54,6 +62,7 @@ export default function ImageHistory() {
       message: "This deletes every image Grok made from this Mac. Copies you saved elsewhere stay.",
       primaryAction: { title: "Delete All", style: Alert.ActionStyle.Destructive },
     })
+
     if (confirmed) {
       change(
         ImageLibrary.use((library) => library.clear),
@@ -67,9 +76,7 @@ export default function ImageHistory() {
       title="Generate Image"
       icon={Icon.Image}
       shortcut={{ modifiers: ["cmd"], key: "n" }}
-      onAction={() =>
-        void launchCommand({ name: "generate-image", type: LaunchType.UserInitiated })
-      }
+      onAction={() => void openCommand("generate-image")}
     />
   )
 
@@ -101,7 +108,7 @@ export default function ImageHistory() {
                 icon={Icon.Trash}
                 style={Action.Style.Destructive}
                 shortcut={{ modifiers: ["ctrl"], key: "x" }}
-                onAction={() => remove(entry)}
+                onAction={() => void remove(entry)}
               />
               <Action
                 title="Delete All Images"

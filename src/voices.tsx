@@ -9,8 +9,6 @@ import {
   Detail,
   Form,
   Icon,
-  launchCommand,
-  LaunchType,
   List,
   showToast,
   Toast,
@@ -45,6 +43,7 @@ import {
   type GrokVoice,
 } from "./lib/voices.ts"
 import type { XaiFailure } from "./lib/xai.ts"
+import { SignInAction } from "./components/launch.tsx"
 
 type State = Data.TaggedEnum<{
   Loading: {}
@@ -54,6 +53,7 @@ type State = Data.TaggedEnum<{
   }
   Failed: { readonly failure: XaiFailure }
 }>
+
 const State = Data.taggedEnum<State>()
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
@@ -68,6 +68,10 @@ const toast = (options: Toast.Options) =>
 
 const failureToast = (title: string) => (failure: { readonly message: string }) =>
   toast({ style: Toast.Style.Failure, title, message: failure.message })
+
+/** Raycast could not save or read the choice in LocalStorage. */
+const storageFailureToast = (title: string) => () =>
+  toast({ style: Toast.Style.Failure, title, message: "Raycast could not save the change." })
 
 export default function Voices() {
   const [state, setState] = useState<State>(State.Loading())
@@ -84,6 +88,7 @@ export default function Voices() {
         Effect.flatMap((next) => Effect.sync(() => setState(next))),
       ),
     )
+
     return () => {
       GrokRuntime.runFork(Fiber.interrupt(fiber))
     }
@@ -100,12 +105,14 @@ export default function Voices() {
       Effect.gen(function* () {
         yield* toast({ style: Toast.Style.Animated, title: `Getting ${voice.name}'s voice…` })
         const preferences = yield* SpeechPreferences
+
         const speech = yield* Speaker.use((speaker) =>
           speaker.speak(
             sampleText(voice),
             new SpeechSettings({ ...preferences, voice: Option.some(voice.id) }),
           ),
         )
+
         yield* SpeechPlayer.use((player) => player.play(speech.audio))
         yield* toast({ style: Toast.Style.Success, title: `Playing ${voice.name}` })
       }).pipe(
@@ -125,6 +132,7 @@ export default function Voices() {
           toast({ style: Toast.Style.Success, title: `Read Aloud Now Uses ${voice.name}` }),
         ),
         Effect.andThen(Effect.sync(reload)),
+        Effect.catch(storageFailureToast("Could Not Change the Read Aloud Voice")),
       ),
     )
 
@@ -138,6 +146,7 @@ export default function Voices() {
           }),
         ),
         Effect.andThen(Effect.sync(reload)),
+        Effect.catch(storageFailureToast("Could Not Change the Read Aloud Voice")),
       ),
     )
 
@@ -147,9 +156,25 @@ export default function Voices() {
       message: "This deletes the custom voice at xAI. It cannot be undone.",
       primaryAction: { title: "Delete", style: Alert.ActionStyle.Destructive },
     })
+
     if (!confirmed) return
     run(
       VoiceLibrary.use((library) => library.remove(voice.id)).pipe(
+        // A deleted voice cannot read aloud, so Read Aloud goes back to its preference.
+        Effect.andThen(
+          ReadAloudVoice.use((chosen) =>
+            chosen.get.pipe(
+              Effect.flatMap((current) =>
+                Effect.when(
+                  chosen.clear.pipe(
+                    Effect.catch(storageFailureToast("Could Not Reset Read Aloud")),
+                  ),
+                  Effect.succeed(Option.exists(current, (picked) => picked.id === voice.id)),
+                ),
+              ),
+            ),
+          ),
+        ),
         Effect.andThen(toast({ style: Toast.Style.Success, title: `Deleted ${voice.name}` })),
         Effect.andThen(Effect.sync(reload)),
         Effect.catchTag("VoicesError", failureToast("Could Not Delete the Voice")),
@@ -194,24 +219,16 @@ export default function Voices() {
     Loaded: ({ voices, readAloud }) => {
       const custom = Arr.filter(voices, (voice) => voice.custom)
       const builtIn = Arr.filter(voices, (voice) => !voice.custom)
+
       const isReadAloud = (voice: GrokVoice) =>
         Option.exists(readAloud, (chosen) => chosen.id === voice.id)
+
       const item = (voice: GrokVoice) => (
         <List.Item
           key={voice.id}
           title={voice.name}
           keywords={[voice.id]}
           icon={voice.custom ? Icon.Person : Icon.SpeakerOn}
-          accessories={
-            isReadAloud(voice)
-              ? [
-                  {
-                    tag: { value: "Read Aloud", color: Color.Green },
-                    tooltip: "Read Aloud uses this voice",
-                  },
-                ]
-              : []
-          }
           detail={<VoiceDetail voice={voice} readAloud={isReadAloud(voice)} />}
           actions={
             <ActionPanel>
@@ -270,6 +287,7 @@ export default function Voices() {
           }
         />
       )
+
       return (
         <List isShowingDetail={voices.length > 0} searchBarPlaceholder="Search voices">
           <List.EmptyView
@@ -298,6 +316,7 @@ function VoiceDetail({
       onNone: () => null,
       onSome: (text) => <List.Item.Detail.Metadata.Label title={title} text={text} />,
     })
+
   return (
     <List.Item.Detail
       markdown={Option.match(voice.description, {
@@ -340,27 +359,12 @@ const titleCase = (value: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
 
-function SignInAction() {
-  return (
-    <Action
-      title="Sign in to Grok"
-      icon={Icon.Person}
-      onAction={() =>
-        void launchCommand({
-          name: "account",
-          type: LaunchType.UserInitiated,
-          context: { signIn: true },
-        })
-      }
-    />
-  )
-}
-
 type RecordState = Data.TaggedEnum<{
   Starting: {}
   Recording: { readonly seconds: number; readonly level: number }
   Failed: { readonly message: string }
 }>
+
 const RecordState = Data.taggedEnum<RecordState>()
 
 /** Steps in the level meter. Fewer steps mean fewer redraws. */
@@ -380,11 +384,14 @@ function RecordVoice({ onCreated }: { readonly onCreated: () => void }) {
     const stopped = Effect.callback<void>((resume) => {
       stopRef.current = () => resume(Effect.void)
     })
+
     const shown = { key: "" }
+
     const fiber = GrokRuntime.runFork(
       recordSpeech(stopped, (seconds, level) => {
         if (seconds >= MAX_REFERENCE_SECONDS) stopRef.current()
         const key = `${levelBar(level, METER_STEPS)} ${clockOf(seconds)}`
+
         if (key === shown.key) return
         shown.key = key
         setState(RecordState.Recording({ seconds, level }))
@@ -411,6 +418,7 @@ function RecordVoice({ onCreated }: { readonly onCreated: () => void }) {
         ),
       ),
     )
+
     return () => {
       GrokRuntime.runFork(Fiber.interrupt(fiber))
     }
@@ -514,15 +522,21 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
     readonly files?: ReadonlyArray<string>
   }) => {
     const name = textValue(values.name)
+
     if (Option.isNone(name)) {
       setNameError(Option.some("Enter a name"))
+
       return
     }
+
     const file = Arr.head(values.files ?? [])
+
     if (mode._tag === "FromFile" && Option.isNone(file)) {
       setFileError(Option.some("Choose an audio file"))
+
       return
     }
+
     const labels = new VoiceLabels({
       name,
       description: textValue(values.description),
@@ -533,12 +547,14 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
       useCase: choice(VoiceUseCase, values.useCase),
       tone: choice(VoiceTone, values.tone),
     })
+
     const audio: Effect.Effect<ReferenceAudio, { readonly message: string }> =
       mode._tag === "Recorded"
         ? Effect.succeed(mode.audio)
         : Effect.tryPromise({
             try: async () => {
               const path = Option.getOrElse(file, () => "")
+
               return new ReferenceAudio({
                 bytes: new Uint8Array(await readFile(path)),
                 filename: basename(path),
@@ -546,6 +562,7 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
             },
             catch: () => ({ message: "Could not read the audio file." }),
           })
+
     const program =
       mode._tag === "Edit"
         ? VoiceLibrary.use((library) => library.update(mode.voice.id, labels)).pipe(
@@ -555,7 +572,7 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
                 title: `Saved ${Option.getOrElse(name, () => "")}`,
               }),
             ),
-            Effect.catchTag("VoicesError", failureToast("Could Not Save the Voice")),
+            Effect.tapError(failureToast("Could Not Save the Voice")),
           )
         : audio.pipe(
             Effect.tap(() => toast({ style: Toast.Style.Animated, title: "Making the voice…" })),
@@ -567,20 +584,25 @@ function VoiceForm({ mode, onDone }: { readonly mode: FormMode; readonly onDone:
                 message: "Preview it, or press ⌘U to use it for Read Aloud.",
               }),
             ),
-            Effect.catch(failureToast("Could Not Make the Voice")),
+            Effect.tapError(failureToast("Could Not Make the Voice")),
           )
+
     setSaving(true)
+    // The form, and a recording, stay open after a failure so the user can try again.
     GrokRuntime.runFork(
       program.pipe(
-        Effect.andThen(
-          Effect.sync(() => {
-            setSaving(false)
-            onDone()
-            // A recording opened this form from the recorder, so go back past it too.
-            pop()
-            if (mode._tag === "Recorded") pop()
-          }),
-        ),
+        Effect.matchEffect({
+          onFailure: () => Effect.sync(() => setSaving(false)),
+          onSuccess: () =>
+            Effect.sync(() => {
+              setSaving(false)
+              onDone()
+              // A recording opened this form from the recorder, so go back past it too.
+              pop()
+
+              if (mode._tag === "Recorded") pop()
+            }),
+        }),
       ),
     )
   }

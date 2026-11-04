@@ -90,6 +90,7 @@ const sameToken = (a: Redacted.Redacted<string>, b: Redacted.Redacted<string>): 
 const withBearer = (request: Request, token: Redacted.Redacted<string>): Request => {
   const headers = new Headers(request.headers)
   headers.set("authorization", `Bearer ${Redacted.value(token)}`)
+
   return new Request(request, { headers, signal: request.signal })
 }
 
@@ -105,6 +106,7 @@ export type FetchFn = (input: string | URL | Request, init?: RequestInit) => Pro
 const notSignedIn = new NotSignedInError({
   message: "Not signed in to Grok. Sign in from Grok Account first.",
 })
+
 const signInExpired = new NotSignedInError({
   message: "The Grok sign-in expired. Sign in again from Grok Account.",
 })
@@ -129,6 +131,7 @@ const make = Effect.fn("GrokSession.make")(function* () {
 
   const runRefresh = Effect.fn("GrokSession.refresh")(function* (stale: Redacted.Redacted<string>) {
     const current = yield* load
+
     // Another caller or command already refreshed: use its tokens.
     if (
       !sameToken(current.accessToken, stale) &&
@@ -136,10 +139,12 @@ const make = Effect.fn("GrokSession.make")(function* () {
     ) {
       return current
     }
+
     const refreshToken = yield* Option.match(current.refreshToken, {
       onNone: () => expire,
       onSome: Effect.succeed,
     })
+
     return yield* refreshTokens(yield* endpoints.get, clientId, refreshToken).pipe(
       Effect.flatMap((response) =>
         Effect.gen(function* () {
@@ -148,7 +153,9 @@ const make = Effect.fn("GrokSession.make")(function* () {
             yield* Clock.currentTimeMillis,
             Option.some(current),
           )
+
           yield* store.save(next)
+
           return next
         }),
       ),
@@ -167,12 +174,14 @@ const make = Effect.fn("GrokSession.make")(function* () {
   ) {
     const latest = yield* store.load
     const now = yield* Clock.currentTimeMillis
+
     const newer = Option.filter(
       latest,
       (tokens) =>
         !Option.makeEquivalence(sameToken)(tokens.refreshToken, current.refreshToken) &&
         !needsRefresh(tokens, now),
     )
+
     return yield* Option.match(newer, { onNone: () => expire, onSome: Effect.succeed })
   })
 
@@ -182,7 +191,9 @@ const make = Effect.fn("GrokSession.make")(function* () {
   /** A current access token, refreshed first when it is within five minutes of expiry. */
   const accessToken = Effect.gen(function* () {
     const tokens = yield* load
+
     if (!needsRefresh(tokens, yield* Clock.currentTimeMillis)) return tokens.accessToken
+
     return (yield* refresh(tokens.accessToken)).accessToken
   }).pipe(Effect.withSpan("GrokSession.accessToken"))
 
@@ -196,9 +207,11 @@ const make = Effect.fn("GrokSession.make")(function* () {
     const retry = copyRequest(request)
     const token = yield* accessToken
     const response = yield* sendRaw(withBearer(request, token))
+
     if (response.status !== 401) return response
     yield* Effect.tryPromise(() => response.body?.cancel() ?? Promise.resolve()).pipe(Effect.ignore)
     const fresh = yield* refresh(token)
+
     return yield* sendRaw(withBearer(retry, fresh.accessToken))
   })
 
@@ -219,8 +232,10 @@ const make = Effect.fn("GrokSession.make")(function* () {
   /** Revoke the refresh token at xAI, then clear local tokens. Local tokens are cleared even if the revoke fails. */
   const signOut = Effect.gen(function* () {
     const stored = yield* store.load
+
     if (Option.isNone(stored)) return false
     const tokens = stored.value
+
     const revoked = yield* Effect.exit(
       Effect.flatMap(endpoints.get, (resolved) =>
         revokeToken(
@@ -230,8 +245,10 @@ const make = Effect.fn("GrokSession.make")(function* () {
         ),
       ),
     )
+
     yield* store.clear
     yield* revoked
+
     return true
   }).pipe(Effect.withSpan("GrokSession.signOut"))
 

@@ -134,6 +134,7 @@ const progress = (): Progress => {
   const texts: Array<string> = []
   const tools: Array<string> = []
   const thoughts: Array<true> = []
+
   return {
     texts,
     tools,
@@ -319,6 +320,7 @@ describe("Chat.ask", () => {
     const error = await askError(
       fakeFetch(() => json({ code: "personal-team-blocked:spending-limit" }, 402)),
     )
+
     assert.equal(error.reason, "plan")
     assert.match(error.message, /out of credits/)
   })
@@ -335,6 +337,7 @@ describe("Chat.ask", () => {
         ]),
       ),
     )
+
     assert.equal(error.reason, "failed")
   })
 })
@@ -345,6 +348,7 @@ const pngFile = async (t: TestContext, name = "chart.png") => {
   t.after(() => rm(folder, { recursive: true, force: true }))
   const path = join(folder, name)
   await writeFile(path, PNG)
+
   return path
 }
 
@@ -369,8 +373,10 @@ describe("Chat.ask with images", () => {
 
   it("resends an earlier turn's image, and leaves it out when the file is gone", async (t) => {
     const image = await pngFile(t)
+
     const earlier = (path: string) =>
       new ChatTurn({ ...turn("Hi", "A chart."), images: Option.some([path]) })
+
     const kept = fakeFetch(answerStream)
     await ask(kept, { history: [earlier(image)] })
     assert.ok(Array.isArray(bodyOf(kept).input[0]?.content))
@@ -381,6 +387,7 @@ describe("Chat.ask with images", () => {
 
   it("fails without calling xAI when an attached image cannot be read", async (t) => {
     const fetch = fakeFetch(answerStream)
+
     const error = await provide(
       Effect.flip(
         Chat.use((chat) =>
@@ -395,10 +402,12 @@ describe("Chat.ask with images", () => {
       fetch,
       signedIn(),
     )
+
     assert.equal(error.reason, "failed")
     assert.match(error.message, /Could not read grokcast-missing\.png/)
     assert.equal(fetch.requests.length, 0)
     const gif = await pngFile(t, "animation.gif")
+
     const unsupported = await provide(
       Effect.flip(
         Chat.use((chat) =>
@@ -413,6 +422,7 @@ describe("Chat.ask with images", () => {
       fetch,
       signedIn(),
     )
+
     assert.match(unsupported.message, /not a JPEG, PNG, or WebP image/)
   })
 })
@@ -457,6 +467,7 @@ describe("chat helpers", () => {
       toolsUsed: ["Searched the web"],
       complete: false,
     })
+
     assert.equal(
       turnMarkdown(answered),
       [

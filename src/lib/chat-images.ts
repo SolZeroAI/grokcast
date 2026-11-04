@@ -37,18 +37,23 @@ export const imageMarkdown = (path: string): string =>
 const read = Effect.fn("ChatImages.read")(function* (path: string) {
   const name = basename(path)
   const type = Option.fromNullishOr(FORMATS.get(extname(path).toLowerCase()))
+
   if (Option.isNone(type)) {
     return yield* new ImageError({
       path,
       message: `${name} is not a JPEG, PNG, or WebP image.`,
     })
   }
+
   const unreadable = () => new ImageError({ path, message: `Could not read ${name}.` })
   const info = yield* Effect.tryPromise({ try: () => stat(path), catch: unreadable })
+
   if (info.size > MAX_IMAGE_BYTES) {
     return yield* new ImageError({ path, message: `${name} is larger than 20 MB.` })
   }
+
   const bytes = yield* Effect.tryPromise({ try: () => readFile(path), catch: unreadable })
+
   return new Blob([new Uint8Array(bytes)], { type: type.value })
 })
 

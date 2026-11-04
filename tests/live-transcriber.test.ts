@@ -43,6 +43,7 @@ const transcribe = (
 ) => {
   const xai = fakeLiveStt(script)
   const updates: Array<string> = []
+
   const result = Effect.runPromise(
     TestClock.setTime(NOW).pipe(
       Effect.andThen(
@@ -64,6 +65,7 @@ const transcribe = (
       ),
     ),
   )
+
   return { sockets: xai.sockets, updates, result }
 }
 
@@ -97,9 +99,11 @@ describe("liveSttUrl", () => {
 describe("toFrames", () => {
   it("regroups chunks into 100 ms frames in their own buffers, and drops a split last sample", async () => {
     const slab = new Uint8Array(FRAME_BYTES * 2 + 3).map((_, index) => index % 251)
+
     const frames = await Effect.runPromise(
       Stream.make(slab.subarray(0, 1001), slab.subarray(1001)).pipe(toFrames, Stream.runCollect),
     )
+
     assert.deepEqual(
       frames.map((frame) => [frame.byteLength, frame.buffer.byteLength]),
       [
@@ -131,6 +135,7 @@ describe("addPartial", () => {
       partial("How are"),
       partial("How are you?", true),
     )
+
     assert.equal(textOf(live), "Hello there. How are you?")
     const finished = addPartial(live, decoded(partial("Hello there. How are you?", true, true)))
     assert.deepEqual(finished.utterances, ["Hello there. How are you?"])
@@ -144,6 +149,7 @@ describe("addPartial", () => {
       partial("", true, true),
       partial("Third"),
     )
+
     assert.equal(textOf(live), "First one. Second Third")
   })
 })
@@ -155,6 +161,7 @@ describe("LiveTranscriber.transcribe", () => {
       onAudioDone: [partial("Hello there.", true), partial("Hello there.", true, true), done],
       dropAfterDone: true,
     })
+
     assert.deepEqual(
       await result,
       Result.succeed(new LiveTranscript({ text: "Hello there.", language: Option.some("en") })),
@@ -174,6 +181,7 @@ describe("LiveTranscriber.transcribe", () => {
       onAudioDone: [partial("Short.", true)],
       dropAfterDone: true,
     })
+
     assert.deepEqual(
       Result.map(await result, (heard) => heard.text),
       Result.succeed("Short."),
@@ -186,6 +194,7 @@ describe("LiveTranscriber.transcribe", () => {
       signedIn(),
       Stream.concat(Stream.make(new Uint8Array(FRAME_BYTES)), Stream.never),
     )
+
     assert.ok(Result.isFailure(await result))
   })
 
@@ -193,6 +202,7 @@ describe("LiveTranscriber.transcribe", () => {
     const { result } = transcribe({
       onAudioDone: [{ type: "error", message: "bad audio" }],
     })
+
     assert.deepEqual(
       Result.getFailure(await result).pipe(Option.map((error) => error.message)),
       Option.some("bad audio"),

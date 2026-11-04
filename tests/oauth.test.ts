@@ -53,6 +53,7 @@ describe("discoverEndpoints", () => {
         revocation_endpoint: "https://auth.x.ai/oauth2/revoke",
       }),
     )
+
     const discovered = await run(discoverEndpoints("https://auth.x.ai"), fetch)
     assert.ok(discovered instanceof OAuthEndpoints)
     assert.deepEqual({ ...discovered }, { ...endpoints })
@@ -66,6 +67,7 @@ describe("discoverEndpoints", () => {
         token_endpoint: "https://attacker.example.com/token",
       }),
     )
+
     const error = await run(Effect.flip(discoverEndpoints("https://auth.x.ai")), fetch)
     assert.equal(error.code, "invalid_discovery")
   })
@@ -89,6 +91,7 @@ describe("requestDeviceCode", () => {
         interval: 5,
       }),
     )
+
     const result = await run(requestDeviceCode(endpoints, DEFAULT_CLIENT_ID), fetch)
     assert.equal(Redacted.value(result.deviceCode), "device-123")
     assert.equal(result.userCode, "ABCD-EFGH")
@@ -113,15 +116,19 @@ describe("pollDeviceToken", () => {
   it("waits while authorization is pending, backs off on slow_down, then returns the tokens", async () => {
     const fetch = fakeFetch((_request, index) => {
       if (index === 0) return json({ error: "authorization_pending" }, 400)
+
       if (index === 1) return json({ error: "slow_down" }, 400)
+
       return json({ access_token: "access", refresh_token: "refresh", expires_in: 21600 })
     })
+
     const requestsAfter = (seconds: number) =>
       TestClock.adjust(`${seconds} seconds`).pipe(
         // Let the HTTP round trip that the clock released finish.
         Effect.andThen(Effect.sleep("10 millis").pipe(TestClock.withLive)),
         Effect.map(() => fetch.requests.length),
       )
+
     const tokens = await run(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(pollDeviceToken(endpoints, "client", device))
@@ -131,10 +138,12 @@ describe("pollDeviceToken", () => {
         assert.equal(yield* requestsAfter(5), 2)
         assert.equal(yield* requestsAfter(9), 2)
         assert.equal(yield* requestsAfter(1), 3)
+
         return yield* Fiber.join(fiber)
       }),
       fetch,
     )
+
     assert.equal(Redacted.value(tokens.access_token), "access")
     assert.deepEqual(Option.map(tokens.refresh_token, Redacted.value), Option.some("refresh"))
     assert.deepEqual(tokens.expires_in, Option.some(21600))
@@ -145,21 +154,26 @@ describe("pollDeviceToken", () => {
 
   it("stops when the user declines", async () => {
     const fetch = fakeFetch(() => json({ error: "access_denied" }, 400))
+
     const error = await run(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(
           Effect.flip(pollDeviceToken(endpoints, "client", device)),
         )
+
         yield* TestClock.adjust("5 seconds")
+
         return yield* Fiber.join(fiber)
       }),
       fetch,
     )
+
     assert.equal(error.code, "access_denied")
   })
 
   it("stops when the code's lifetime has passed", async () => {
     const fetch = fakeFetch(() => json({ error: "authorization_pending" }, 400))
+
     const error = await run(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(
@@ -167,24 +181,30 @@ describe("pollDeviceToken", () => {
             pollDeviceToken(endpoints, "client", new DeviceCode({ ...device, expiresIn: 10 })),
           ),
         )
+
         yield* TestClock.adjust("10 seconds")
+
         return yield* Fiber.join(fiber)
       }),
       fetch,
     )
+
     assert.equal(error.code, "expired_token")
   })
 
   it("stops when interrupted", async () => {
     const fetch = fakeFetch(() => json({ error: "authorization_pending" }, 400))
+
     const exit = await run(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(pollDeviceToken(endpoints, "client", device))
         yield* Fiber.interrupt(fiber)
+
         return yield* Fiber.await(fiber)
       }),
       fetch,
     )
+
     assert.equal(exit._tag, "Failure")
     assert.equal(fetch.requests.length, 0)
   })
@@ -195,10 +215,12 @@ describe("refreshTokens", () => {
     const fetch = fakeFetch(() =>
       json({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 21600 }),
     )
+
     const tokens = await run(
       refreshTokens(endpoints, "client", Redacted.make("old-refresh")),
       fetch,
     )
+
     assert.deepEqual(Option.map(tokens.refresh_token, Redacted.value), Option.some("new-refresh"))
     const sent = formOf(fetch, 0)
     assert.equal(sent.get("grant_type"), "refresh_token")
@@ -207,29 +229,35 @@ describe("refreshTokens", () => {
 
   it("reports invalid_grant for a spent refresh token", async () => {
     const fetch = fakeFetch(() => json({ error: "invalid_grant" }, 400))
+
     const error = await run(
       Effect.flip(refreshTokens(endpoints, "client", Redacted.make("spent"))),
       fetch,
     )
+
     assert.equal(error._tag, "OAuthError")
     assert.equal(error.code, "invalid_grant")
   })
 
   it("rejects a response with no access token", async () => {
     const fetch = fakeFetch(() => json({ token_type: "Bearer" }))
+
     const error = await run(
       Effect.flip(refreshTokens(endpoints, "client", Redacted.make("refresh"))),
       fetch,
     )
+
     assert.equal(error.code, "invalid_token_response")
   })
 
   it("keeps tokens out of error messages", async () => {
     const fetch = fakeFetch(() => json({ access_token: "secret-access", expires_in: "soon" }))
+
     const error = await run(
       Effect.flip(refreshTokens(endpoints, "client", Redacted.make("secret-refresh"))),
       fetch,
     )
+
     assert.doesNotMatch(String(error), /secret/)
   })
 })

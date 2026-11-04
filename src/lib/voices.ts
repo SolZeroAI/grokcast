@@ -36,9 +36,11 @@ export class VoicesError extends Schema.TaggedError<VoicesError>()("VoicesError"
 }) {}
 
 export const VoiceGender = Schema.Literals(["male", "female", "neutral"])
+
 export type VoiceGender = typeof VoiceGender.Type
 
 export const VoiceAge = Schema.Literals(["young", "middle-aged", "old"])
+
 export type VoiceAge = typeof VoiceAge.Type
 
 export const VoiceUseCase = Schema.Literals([
@@ -50,6 +52,7 @@ export const VoiceUseCase = Schema.Literals([
   "social_media",
   "entertainment",
 ])
+
 export type VoiceUseCase = typeof VoiceUseCase.Type
 
 export const VoiceTone = Schema.Literals([
@@ -61,6 +64,7 @@ export const VoiceTone = Schema.Literals([
   "expressive",
   "calm",
 ])
+
 export type VoiceTone = typeof VoiceTone.Type
 
 /** The labels xAI keeps with a custom voice. None leaves a label empty. */
@@ -199,10 +203,12 @@ const voiceOrder = Order.combine(
 /** A RIFF header in front of mono 16 kHz 16-bit PCM, so xAI can read a recording. */
 export const wavOf = (pcm: Uint8Array): Uint8Array<ArrayBuffer> => {
   const header = new DataView(new ArrayBuffer(44))
+
   const ascii = (offset: number, value: string) =>
     Arr.forEach(Arr.fromIterable(value), (char, index) =>
       header.setUint8(offset + index, char.charCodeAt(0)),
     )
+
   ascii(0, "RIFF")
   header.setUint32(4, 36 + pcm.byteLength, true)
   ascii(8, "WAVE")
@@ -216,6 +222,7 @@ export const wavOf = (pcm: Uint8Array): Uint8Array<ArrayBuffer> => {
   header.setUint16(34, BYTES_PER_SAMPLE * 8, true)
   ascii(36, "data")
   header.setUint32(40, pcm.byteLength, true)
+
   return joinChunks([new Uint8Array(header.buffer), pcm])
 }
 
@@ -228,6 +235,7 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
   const sdk = client.pipe(
     Effect.mapError((error) => new VoicesError({ reason: "failed", message: error.message })),
   )
+
   const options = (signal: AbortSignal, timeout = REQUEST_TIMEOUT) => ({
     signal,
     maxRetries: 0,
@@ -237,6 +245,7 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
   const list = Effect.gen(function* () {
     const xai = yield* sdk
     const failed = toVoicesError("xAI could not list the voices")
+
     const [builtIn, custom] = yield* Effect.all(
       [
         callXai((signal) => xai.voice.list(options(signal))).pipe(Effect.mapError(failed)),
@@ -248,6 +257,7 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
       ],
       { concurrency: "unbounded" },
     )
+
     return Arr.sort(
       [...Arr.map(custom, fromCustom), ...Arr.map(builtIn.voices, fromBuiltIn)],
       voiceOrder,
@@ -259,6 +269,7 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
     labels: VoiceLabels,
   ) {
     const xai = yield* sdk
+
     const created = yield* callXai((signal) =>
       xai.voice.custom.create(
         {
@@ -268,14 +279,17 @@ const makeLibrary = Effect.fn("VoiceLibrary.make")(function* () {
         options(signal, CREATE_TIMEOUT),
       ),
     ).pipe(Effect.mapError(toVoicesError("xAI could not make the voice")))
+
     return fromCustom(created)
   })
 
   const update = Effect.fn("VoiceLibrary.update")(function* (id: string, labels: VoiceLabels) {
     const xai = yield* sdk
+
     const updated = yield* callXai((signal) =>
       xai.voice.custom.update(id, updateLabels(labels), options(signal)),
     ).pipe(Effect.mapError(toVoicesError("xAI could not change the voice")))
+
     return fromCustom(updated)
   })
 
@@ -317,14 +331,13 @@ export class ChosenVoice extends Schema.Class<ChosenVoice>("ChosenVoice")({
 
 const makeReadAloudVoice = Effect.fn("ReadAloudVoice.make")(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, ChosenVoice)
+
   return ReadAloudVoice.of({
     // An unreadable record counts as no choice, so Read Aloud still reads.
     get: store.get(READ_ALOUD_VOICE_KEY).pipe(Effect.catch(() => Effect.succeedNone)),
     set: (voice) =>
-      store
-        .set(READ_ALOUD_VOICE_KEY, new ChosenVoice({ id: voice.id, name: voice.name }))
-        .pipe(Effect.ignore),
-    clear: store.remove(READ_ALOUD_VOICE_KEY).pipe(Effect.ignore),
+      store.set(READ_ALOUD_VOICE_KEY, new ChosenVoice({ id: voice.id, name: voice.name })),
+    clear: store.remove(READ_ALOUD_VOICE_KEY),
   })
 })
 
@@ -336,8 +349,10 @@ export class ReadAloudVoice extends Context.Service<
   ReadAloudVoice,
   {
     readonly get: Effect.Effect<Option.Option<ChosenVoice>>
-    readonly set: (voice: GrokVoice) => Effect.Effect<void>
-    readonly clear: Effect.Effect<void>
+    readonly set: (
+      voice: GrokVoice,
+    ) => Effect.Effect<void, KeyValueStore.KeyValueStoreError | Schema.SchemaError>
+    readonly clear: Effect.Effect<void, KeyValueStore.KeyValueStoreError>
   }
 >()("grokcast/ReadAloudVoice") {
   static readonly layer = Layer.effect(ReadAloudVoice, makeReadAloudVoice())

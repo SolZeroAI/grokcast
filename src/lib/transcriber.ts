@@ -57,10 +57,12 @@ const makeTranscriber = Effect.fn("Transcriber.make")(function* () {
         (error) => new TranscriptionError({ reason: "failed", message: error.message }),
       ),
     )
+
     const language = Option.match(options.language, {
       onNone: () => ({}),
       onSome: (code) => ({ language: code, format: options.formatNumbers }),
     })
+
     const result = yield* callXai((signal) =>
       xai.voice.transcribe(
         {
@@ -73,6 +75,7 @@ const makeTranscriber = Effect.fn("Transcriber.make")(function* () {
         { signal, maxRetries: 0, timeout: Duration.toMillis(REQUEST_TIMEOUT) },
       ),
     ).pipe(Effect.mapError(toTranscriptionError))
+
     return new Transcript({
       text: result.text.trim(),
       seconds: result.duration,

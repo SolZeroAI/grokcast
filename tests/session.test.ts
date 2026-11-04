@@ -59,6 +59,7 @@ describe("toStoredTokens", () => {
       NOW,
       Option.some(tokens("a1", "r1", NOW)),
     )
+
     assert.equal(Redacted.value(stored.accessToken), "a2")
     assert.deepEqual(Option.map(stored.refreshToken, Redacted.value), Option.some("r2"))
     assert.equal(stored.expiresAt, NOW + 21600 * 1000)
@@ -70,6 +71,7 @@ describe("toStoredTokens", () => {
       NOW,
       Option.some(tokens("a1", "r1", NOW)),
     )
+
     assert.deepEqual(Option.map(stored.refreshToken, Redacted.value), Option.some("r1"))
   })
 })
@@ -84,9 +86,11 @@ describe("GrokSession.accessToken", () => {
 
   it("refreshes within five minutes of expiry and saves the rotated tokens", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW + REFRESH_MARGIN_MS - 1))
+
     const fetch = fakeFetch(() =>
       json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }),
     )
+
     assert.equal(await run(accessToken, fetch, store), "a2")
     assert.deepEqual(
       plain(store),
@@ -99,30 +103,37 @@ describe("GrokSession.accessToken", () => {
       Effect.flip(accessToken),
       fakeFetch(() => json({})),
     )
+
     assert.equal(error._tag, "NotSignedInError")
   })
 
   it("shares one refresh between concurrent callers", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW))
+
     const fetch = fakeFetch(() =>
       json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 }),
     )
+
     const results = await run(
       Effect.all([accessToken, accessToken, accessToken], { concurrency: "unbounded" }),
       fetch,
       store,
     )
+
     assert.deepEqual(results, ["a2", "a2", "a2"])
     assert.equal(fetch.requests.length, 1)
   })
 
   it("uses tokens another command already refreshed when its own refresh token was spent", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW))
+
     const fetch = fakeFetch(() => {
       // Another process refreshed first and saved r2, so r1 is now spent.
       store.current = Option.some(tokens("a2", "r2", NOW + 6 * HOUR))
+
       return json({ error: "invalid_grant" }, 400)
     })
+
     assert.equal(await run(accessToken, fetch, store), "a2")
   })
 
@@ -150,6 +161,7 @@ describe("GrokSession.fetch", () => {
   it("sets the bearer token and keeps the request", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW + HOUR))
     const fetch = fakeFetch(() => json({ text: "hello" }))
+
     const response = await run(
       sessionFetch("https://api.x.ai/v1/stt", {
         method: "POST",
@@ -159,6 +171,7 @@ describe("GrokSession.fetch", () => {
       fetch,
       store,
     )
+
     assert.equal(response.status, 200)
     assert.equal(fetch.requests[0]?.headers.get("authorization"), "Bearer a1")
     assert.equal(fetch.requests[0]?.headers.get("x-test"), "yes")
@@ -179,19 +192,23 @@ describe("GrokSession.fetch", () => {
 
   it("refreshes once on a 401 and retries with the same body", async () => {
     const store = memoryStore(tokens("a1", "r1", NOW + HOUR))
+
     const fetch = fakeFetch((request) => {
       if (request.url.endsWith("/oauth2/token")) {
         return json({ access_token: "a2", refresh_token: "r2", expires_in: 21600 })
       }
+
       return request.headers.get("authorization") === "Bearer a2"
         ? json({ ok: "yes" })
         : json({ error: "unauthorized" }, 401)
     })
+
     const response = await run(
       sessionFetch("https://api.x.ai/v1/stt", { method: "POST", body: "audio" }),
       fetch,
       store,
     )
+
     assert.equal(response.status, 200)
     assert.deepEqual(
       fetch.requests.map((request) => request.url),

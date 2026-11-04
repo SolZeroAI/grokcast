@@ -27,11 +27,13 @@ describe("WsWebSocketConstructor", () => {
         const socket = yield* Socket.makeWebSocket(`ws://127.0.0.1:${port}`, {
           headers: { authorization: "Bearer test" },
         })
+
         const reader = yield* socket.reader
         const writer = yield* socket.writer
         const first = yield* reader.pull
         yield* writer.write(new Uint8Array([1, 2, 3]))
         const closed = yield* Effect.flip(reader.pull)
+
         return { first, closed }
       }).pipe(Effect.scoped, Effect.provide(WsWebSocketConstructor)),
     )

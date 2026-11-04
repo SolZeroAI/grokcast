@@ -32,6 +32,7 @@ export const MicrophoneAccess = Schema.Literals([
   "restricted",
   "notDetermined",
 ])
+
 export type MicrophoneAccess = typeof MicrophoneAccess.Type
 
 /** The microphone could not be used. `reason` says why, `message` is for the user. */
@@ -58,6 +59,7 @@ export type RecorderExit = Data.TaggedEnum<{
   Finished: {}
   Failed: { readonly message: string }
 }>
+
 export const RecorderExit = Data.taggedEnum<RecorderExit>()
 
 /** The exit for a recorder exit code (none when a signal ended it) and what it printed to stderr. */
@@ -105,20 +107,24 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
   /** Ask for access the first time; fail with a clear message when it was turned off. */
   const ensureAccess = Effect.gen(function* () {
     const status = yield* permission.status
+
     const allowed = yield* Match.value(status).pipe(
       Match.when("authorized", () => Effect.succeed(true)),
       Match.when("notDetermined", () => permission.request),
       Match.orElse(() => Effect.succeed(false)),
     )
+
     if (!allowed) return yield* new RecorderError({ reason: "denied", message: deniedMessage })
   }).pipe(Effect.withSpan("Recorder.ensureAccess"))
 
   const audio = Stream.callback<Uint8Array, RecorderError>((queue) => {
     const exited = Deferred.makeUnsafe<void>()
     const samples = sampleAligner()
+
     const events: RecorderEvents = {
       audio: (chunk) => {
         const aligned = samples(chunk)
+
         if (aligned.byteLength > 0) Queue.offerUnsafe(queue, aligned)
       },
       exit: (exit) => {
@@ -129,12 +135,14 @@ const makeRecorder = Effect.fn("Recorder.make")(function* () {
         })
       },
     }
+
     /** Tell the recorder to stop and exit; kill it when it does not. */
     const stop = (recorder: RecorderProcess) =>
       Effect.sync(recorder.finish).pipe(
         Effect.andThen(Deferred.await(exited)),
         Effect.timeoutOrElse({ duration: STOP_GRACE, orElse: () => Effect.sync(recorder.kill) }),
       )
+
     return Effect.acquireRelease(
       Effect.try({
         try: () =>
@@ -175,10 +183,12 @@ export class Recorder extends Context.Service<
  */
 export const sampleAligner = () => {
   const carry = { bytes: new Uint8Array(0) }
+
   return (chunk: Uint8Array): Uint8Array => {
     const joined = carry.bytes.byteLength === 0 ? chunk : joinChunks([carry.bytes, chunk])
     const whole = joined.byteLength - (joined.byteLength % BYTES_PER_SAMPLE)
     carry.bytes = joined.slice(whole)
+
     return joined.subarray(0, whole)
   }
 }
@@ -189,11 +199,14 @@ export const sampleAligner = () => {
  */
 export const levelDbfs = (chunk: Uint8Array): number => {
   const samples = Math.floor(chunk.byteLength / BYTES_PER_SAMPLE)
+
   if (samples === 0) return Number.NEGATIVE_INFINITY
   const view = new DataView(chunk.buffer, chunk.byteOffset, samples * BYTES_PER_SAMPLE)
+
   const sumOfSquares = Array.from({ length: samples }, (_, index) =>
     view.getInt16(index * BYTES_PER_SAMPLE, true),
   ).reduce((sum, sample) => sum + (sample / 32768) ** 2, 0)
+
   return 10 * Math.log10(sumOfSquares / samples)
 }
 
@@ -203,6 +216,7 @@ export const durationOfBytes = (bytes: number): number => bytes / (SAMPLE_RATE *
 /** A text meter with `steps` steps (20 by default) for a level between -60 dBFS and 0 dBFS. */
 export const levelBar = (level: number, steps = 20): string => {
   const filled = Math.round(Math.min(1, Math.max(0, (level + 60) / 60)) * steps)
+
   return "█".repeat(filled) + "░".repeat(steps - filled)
 }
 
@@ -211,7 +225,9 @@ export const joinChunks = (chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayB
   const joined = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0))
   chunks.reduce((offset, chunk) => {
     joined.set(chunk, offset)
+
     return offset + chunk.byteLength
   }, 0)
+
   return joined
 }

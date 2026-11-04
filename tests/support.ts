@@ -41,17 +41,22 @@ export const formOf = (fetch: FakeFetch, index: number): URLSearchParams =>
 /** A fake `fetch` that records each request and answers from `respond`. */
 export function fakeFetch(respond: (request: Recorded, index: number) => Response): FakeFetch {
   const requests: Array<Recorded> = []
+
   const fetchFn: FetchFn = async (input, init) => {
     const request = new Request(input, init)
+
     const recorded = {
       url: request.url,
       method: request.method,
       headers: request.headers,
       body: await request.text(),
     }
+
     requests.push(recorded)
+
     return respond(recorded, requests.length - 1)
   }
+
   return { fetch: fetchFn, requests }
 }
 
@@ -123,5 +128,6 @@ export const pngHeader = (width: number, height: number) => {
   const view = new DataView(bytes.buffer)
   view.setUint32(16, width)
   view.setUint32(20, height)
+
   return bytes
 }

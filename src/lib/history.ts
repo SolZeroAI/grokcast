@@ -59,6 +59,7 @@ const makeHistory = Effect.fn("DictationHistory.make")(function* () {
 
   const add = Effect.fn("DictationHistory.add")(function* (dictation: NewEntry) {
     const createdAt = yield* Clock.currentTimeMillis
+
     const entry = new HistoryEntry({
       id: String(createdAt),
       text: dictation.text,
@@ -68,6 +69,7 @@ const makeHistory = Effect.fn("DictationHistory.make")(function* () {
       readySeconds: Option.some(dictation.readySeconds),
       live: Option.some(dictation.live),
     })
+
     yield* update((entries) =>
       Arr.take(
         Arr.prepend(
@@ -77,6 +79,7 @@ const makeHistory = Effect.fn("DictationHistory.make")(function* () {
         MAX_HISTORY,
       ),
     )
+
     return entry
   })
 

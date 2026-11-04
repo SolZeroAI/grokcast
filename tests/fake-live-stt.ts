@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema"
 import * as Socket from "effect/socket/Socket"
 
 type Listener = (event: Socket.WebSocketEvent) => void
+
 type EventType = "open" | "message" | "error" | "close"
 
 /** A server event, as xAI sends it. */
@@ -63,8 +64,10 @@ export class FakeSocket implements Socket.WebSocketLike {
       if (script.refuse) {
         this.emit("error", { type: "error" })
         this.drop()
+
         return
       }
+
       this.readyState = 1
       this.emit("open", { type: "open" })
       this.sendAll(script.onOpen ?? [created])
@@ -79,6 +82,7 @@ export class FakeSocket implements Socket.WebSocketLike {
     const index = this.listeners.findIndex(
       (entry) => entry.type === type && entry.listener === listener,
     )
+
     if (index >= 0) this.listeners.splice(index, 1)
   }
 
@@ -90,17 +94,22 @@ export class FakeSocket implements Socket.WebSocketLike {
 
   send(data: string | Uint8Array) {
     if (this.readyState !== 1) return
+
     if (P.isString(data)) {
       this.texts.push(data)
       setImmediate(() => {
         this.sendAll(this.script.onAudioDone ?? [done])
+
         if (this.script.dropAfterDone) this.drop()
       })
+
       return
     }
+
     const frames = this.audio.push({ bytes: data.byteLength, afterCreated: this.createdSent })
     setImmediate(() => {
       this.sendAll(this.script.onAudio ?? [])
+
       if (frames === this.script.dropAfterFrames) this.drop()
     })
   }
@@ -108,6 +117,7 @@ export class FakeSocket implements Socket.WebSocketLike {
   private sendAll(events: ReadonlyArray<XaiEvent>) {
     events.forEach((event) => {
       if (this.readyState !== 1) return
+
       if (event.type === "transcript.created") this.createdSent = true
       this.emit("message", { type: "message", data: encodeEvent(event) })
     })
@@ -131,6 +141,7 @@ export class FakeSocket implements Socket.WebSocketLike {
 /** A fake xAI streaming endpoint. Each connection follows `script`. */
 export const fakeLiveStt = (script: Script = {}) => {
   const sockets: Array<FakeSocket> = []
+
   const layer = Layer.succeed(
     Socket.WebSocketConstructor,
     Socket.WebSocketConstructor.of((url, options) => {
@@ -138,10 +149,13 @@ export const fakeLiveStt = (script: Script = {}) => {
         P.isString(options) || Arr.isArray(options) || P.isUndefined(options)
           ? {}
           : (options.headers ?? {})
+
       const socket = new FakeSocket(url, headers, script)
       sockets.push(socket)
+
       return socket
     }),
   )
+
   return { sockets, layer }
 }
