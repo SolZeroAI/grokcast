@@ -6,6 +6,7 @@ import * as Fiber from "effect/Fiber"
 import * as Match from "effect/Match"
 import * as Option from "effect/Option"
 import { useEffect, useState } from "react"
+import { useDictatedFields } from "./components/dictation.tsx"
 import { GrokRuntime } from "./lib/grok.ts"
 import { ModelCatalog, type GrokModel, type ModelKind, type Token } from "./lib/models.ts"
 import type { XaiFailure } from "./lib/xai.ts"
@@ -176,7 +177,8 @@ function TagRow({ title, values }: { readonly title: string; readonly values: Re
 /** A form for the text, then the count from xAI's tokenizer for `model`. */
 function CountTokens({ model }: { readonly model: string }) {
   const { push } = useNavigation()
-  const [text, setText] = useState("")
+  const dictation = useDictatedFields({ text: { title: "Text" } }, "text")
+  const text = dictation.values.text
 
   return (
     <Form
@@ -188,16 +190,15 @@ function CountTokens({ model }: { readonly model: string }) {
             icon={Icon.Hashtag}
             onSubmit={() => push(<TokenCount model={model} text={text} />)}
           />
+          {dictation.action}
         </ActionPanel>
       }
     >
       <Form.Description text={`See how ${model} splits text into tokens.`} />
       <Form.TextArea
-        id="text"
+        {...dictation.field("text")}
         title="Text"
         placeholder="Paste or type text"
-        value={text}
-        onChange={setText}
         error={text.trim() === "" ? "Enter some text" : undefined}
       />
     </Form>
