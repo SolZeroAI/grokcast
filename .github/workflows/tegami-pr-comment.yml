@@ -24,8 +24,8 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
-    runs-on: [self-hosted, arm64, linux]
+    # Public repository: GitHub-hosted runners are free.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout trusted release tooling

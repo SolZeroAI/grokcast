@@ -20,8 +20,8 @@ jobs:
   preview:
     name: Build release preview
     if: github.event.pull_request.draft != true
-    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
-    runs-on: [self-hosted, arm64, linux]
+    # Public repository: GitHub-hosted runners are free.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout pull request

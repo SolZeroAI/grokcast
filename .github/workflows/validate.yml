@@ -28,8 +28,8 @@ jobs:
   validate:
     name: Typecheck, lint, format, and test
     if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'tegami/version-packages' && github.event.pull_request.user.login == 'solzero-bot[bot]') && github.event.pull_request.draft != true }}
-    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
-    runs-on: [self-hosted, arm64, linux]
+    # Public repository: GitHub-hosted runners are free.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -66,8 +66,8 @@ jobs:
   changes:
     name: Detect build changes
     if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'tegami/version-packages' && github.event.pull_request.user.login == 'solzero-bot[bot]') && github.event.pull_request.draft != true }}
-    # SolZeroAI's self-hosted arm64 Linux runners (mayflower).
-    runs-on: [self-hosted, arm64, linux]
+    # Public repository: GitHub-hosted runners are free.
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
@@ -76,8 +76,7 @@ jobs:
       build: ${{ steps.build.outputs.build }}
     steps:
       # A pull request runs the macOS build only when it changes a file `ray build` reads.
-      # Pushes to master and manual runs always build. The macOS pool has two VMs, shared
-      # with other repositories.
+      # Pushes to master and manual runs always build.
       - name: Check changed files
         id: build
         env:
@@ -100,8 +99,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.build == 'true'
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
-    # SolZeroAI's self-hosted macOS runners (mayflower), which carry Xcode.
-    runs-on: [self-hosted, arm64, macos]
+    # GitHub-hosted macos-15 provides Xcode 16.4 as its default.
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - name: Checkout

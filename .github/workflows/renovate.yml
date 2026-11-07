@@ -24,5 +24,6 @@ jobs:
   renovate:
     uses: SolZeroAI/renovate-config/.github/workflows/renovate.yml@master
     secrets: inherit
+    # Public repository: the shared workflow accepts ubuntu-latest for a GitHub-hosted runner.
     with:
-      runs-on: '["self-hosted","arm64","linux"]'
+      runs-on: ubuntu-latest
