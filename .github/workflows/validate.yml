@@ -100,7 +100,7 @@ jobs:
     if: needs.changes.outputs.build == 'true'
     # The recorder in recorder/ needs macOS and Xcode 16.3 or later, like the Raycast Store build.
     # GitHub-hosted macos-15 provides Xcode 16.4 as its default.
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - name: Checkout
