@@ -1,50 +1,18 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Ask Grok about images\n\nGrok Chat can now look at images. Attach the images selected in Finder (⌘⇧F), an image on the clipboard (⌘⇧V), or pick files (⌘⇧I), then ask your question. Grok reads JPEG, PNG, and WebP images up to 20 MB, and the images stay part of the conversation for follow-ups.\n"
-    filename: chat-images.md
+  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## See how Grok got to its answer\n\nGrok Chat now shows what Grok did before it answered, in order, above the answer: \"Thinking for 3 s\" while it thinks, then \"Thought for 3 s\", \"Searching the web\", the searches it ran, and the icons of the sites it read. The sources under the answer show their site icons too. Press ⌘I on an answer to open Steps and Sources, where each step expands to what Grok thought, searched for, and read, and each source opens in your browser.\n"
+    filename: chat-steps.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Dictate\n\nAdd Dictate and Dictation History. Dictate records until you press Return, transcribes the recording with xAI speech-to-text on your Grok or X subscription, and pastes the text into the app you were using (or copies it). Choose the language, number formatting, paste or copy, and whether to keep a history of the last 100 dictations in the extension preferences. Audio is never saved.\n"
-    filename: dictate.md
+  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Dictate into text fields\n\nPress ⌘⇧D in Grok Chat, Generate Image, Edit Image, Generate Video, Count Tokens, or a voice's form to dictate into the text field. Speak, then press Return. Grok's text goes at the end of the field you were in, or into the prompt when you had not picked one. Press Esc to cancel without changing the field.\n"
+    filename: dictate-into-fields.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Grok Files\n\nAdd Grok Files. It lists the files you keep at xAI with your Grok or X subscription, and lets you upload a file from this Mac, download a file to your Downloads folder, make or revoke a public link, and delete a file. Uploads and public links can expire after 1 hour, 1 day, 7 days, or 30 days.\n"
-    filename: files.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Grok Chat\n\nAdd Grok Chat. Ask Grok a question in the search bar and the answer streams into the side panel, with its sources and the tools Grok used. Ask follow-ups in the same conversation, start a new one with ⌘N, and find the last 50 conversations with ⌘Y. Grok can search the web and X, and can run Python in xAI's sandbox if you turn that on. The model is left to xAI's default unless you pick one in the command preferences.\n"
-    filename: grok-chat.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Images\n\nAdd Generate Image, Edit Image, and Image History. Generate Image makes up to four images from a prompt with Grok Imagine on your Grok or X subscription, with a choice of aspect ratio and resolution. Edit Image changes up to three images (the Finder selection by default) with a prompt. Copy, paste, Quick Look, save, or edit any result, and find your last 200 images in Image History.\n"
-    filename: images.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Live dictation\n\nDictate now shows the text while you speak, using xAI's streaming speech-to-text on your Grok or X subscription. If the live connection stops, Dictate keeps recording and sends the whole recording when you stop, so you still get your text. After a dictation, Dictate shows the words, length, speaking speed, and language, and ⌘Y opens Dictation History, which shows the same details.\n"
-    filename: live-dictation.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Grok Models\n\nAdd Grok Models. It lists the Grok language, image, and video models your Grok or X subscription can use, with each model's version, aliases, inputs and outputs, context length, and reasoning efforts. On a language model, Count Tokens shows how the model splits a text into tokens.\n"
-    filename: models.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Read Aloud\n\nAdd Read Aloud. It reads the selected text, the clipboard, or text you type aloud in a Grok voice with your Grok or X subscription, in the background. Run it again to stop. Choose the voice, speed, and reading language in the command preferences.\n"
-    filename: read-aloud.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Sign in with your Grok subscription\n\nAdd Grok Account. It shows who is signed in, and signs you in or out. Sign-in uses the xAI device-code flow with your Grok or X subscription, so no xAI API key is needed. Tokens stay in Raycast's encrypted token store and refresh on their own.\n"
-    filename: sign-in.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Generate Video\n\nAdd Generate Video. Make a short video with Grok from a prompt or a starting picture, or edit or extend an MP4, with your Grok or X subscription. Length, aspect ratio, and resolution default to xAI's choice, and the model is always xAI's default. The side panel shows progress while Grok works. When the video is ready, open it in the browser, copy its link, or save the MP4 to your Downloads folder.\n"
-    filename: video.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:grokcast:\n    type: minor\n---\n\n## Grok Voices\n\nAdd Grok Voices. Preview Grok's built-in voices and your custom voices, make a custom voice from a recording of up to 2 minutes or from an audio file, edit or delete your voices, and pick the voice Read Aloud uses, including a custom one.\n"
-    filename: voices.md
+  - content: "---\npackages:\n  npm:grokcast:\n    type: patch\n---\n\n## Fixes from the Store review\n\nA failed voice save keeps the form and your recording open. Read Aloud says when it could not change its voice, and goes back to its Voice preference when you delete the voice it uses. Dictate says when it could not paste or copy, instead of reporting a copy. Grok Chat keeps every turn when you continue a conversation from Show Conversations. Generate Video keeps **Check Again** after a failed status check, so a running video is not lost. Deleting one dictation, image, or conversation asks first. The sign-in code stays out of Clipboard History. Open Image History moves to ⇧⌘Y, because ⌘Y is Quick Look. When a command is turned off, Grokcast says how to turn it on.\n"
+    filename: store-review-fixes.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - chat-images.md
-      - dictate.md
-      - files.md
-      - grok-chat.md
-      - images.md
-      - live-dictation.md
-      - models.md
-      - read-aloud.md
-      - sign-in.md
-      - video.md
-      - voices.md
+      - chat-steps.md
+      - dictate-into-fields.md
+      - store-review-fixes.md
     id: npm:grokcast
     updated: true
 npm:packages:

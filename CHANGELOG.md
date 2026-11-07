@@ -1,3 +1,17 @@
+## [0.2.0] - {PR_MERGE_DATE}
+
+### See how Grok got to its answer
+
+Grok Chat now shows what Grok did before it answered, in order, above the answer: "Thinking for 3 s" while it thinks, then "Thought for 3 s", "Searching the web", the searches it ran, and the icons of the sites it read. The sources under the answer show their site icons too. Press ⌘I on an answer to open Steps and Sources, where each step expands to what Grok thought, searched for, and read, and each source opens in your browser.
+
+### Dictate into text fields
+
+Press ⌘⇧D in Grok Chat, Generate Image, Edit Image, Generate Video, Count Tokens, or a voice's form to dictate into the text field. Speak, then press Return. Grok's text goes at the end of the field you were in, or into the prompt when you had not picked one. Press Esc to cancel without changing the field.
+
+### Fixes from the Store review
+
+A failed voice save keeps the form and your recording open. Read Aloud says when it could not change its voice, and goes back to its Voice preference when you delete the voice it uses. Dictate says when it could not paste or copy, instead of reporting a copy. Grok Chat keeps every turn when you continue a conversation from Show Conversations. Generate Video keeps **Check Again** after a failed status check, so a running video is not lost. Deleting one dictation, image, or conversation asks first. The sign-in code stays out of Clipboard History. Open Image History moves to ⇧⌘Y, because ⌘Y is Quick Look. When a command is turned off, Grokcast says how to turn it on.
+
 ## [Initial Version] - {PR_MERGE_DATE}
 
 ### Ask Grok about images
